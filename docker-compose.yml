@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # WPPConnect Server para gerenciar sessões WhatsApp
+  wppconnect:
+    build:
+      context: .
+      dockerfile: Dockerfile.wppconnect
+    container_name: barber-saas-wppconnect
+    ports:
+      - "3333:3333"
+    volumes:
+      - wppconnect-sessions:/app/sessions
+      - wppconnect-logs:/app/logs
+    environment:
+      - CHROME_BIN=/usr/bin/chromium-browser
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3333/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - barber-saas-network
+
+  # Aplicação Node.js principal
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: barber-saas-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - VITE_APP_ID=${VITE_APP_ID}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
+      - VITE_OAUTH_PORTAL_URL=${VITE_OAUTH_PORTAL_URL}
+      - WPPCONNECT_API_URL=http://wppconnect:3333
+      - WEBHOOK_URL=http://app:3000
+    depends_on:
+      wppconnect:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - barber-saas-network
+
+volumes:
+  wppconnect-sessions:
+    driver: local
+  wppconnect-logs:
+    driver: local
+
+networks:
+  barber-saas-network:
+    driver: bridge
