@@ -38,6 +38,22 @@ export const whatsappRouter = router({
         enabled: z.boolean(),
         model: z.string().optional(),
         prompt: z.string().optional(),
+        assistantName: z.string().optional(),
+        personality: z.string().optional(),
+        humanPause: z.string().optional(),
+        clientPause: z.string().optional(),
+        greetingMessage: z.string().optional(),
+        closingMessage: z.string().optional(),
+        reminders: z.object({
+          first: z.string().optional(),
+          second: z.string().optional(),
+          third: z.string().optional()
+        }).optional(),
+        followUps: z.object({
+          first: z.string().optional(),
+          second: z.string().optional(),
+          third: z.string().optional()
+        }).optional()
       }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {

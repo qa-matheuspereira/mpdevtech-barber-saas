@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle2, QrCode, RefreshCw, Server, Bot, Webhook } from "lucide-react";
+import { AlertCircle, CheckCircle2, QrCode, RefreshCw, Server, Bot, Webhook, Clock, MessageSquare, Bell, Edit2, UserCircle } from "lucide-react";
 import QRCode from "qrcode";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -28,6 +28,15 @@ export default function WhatsappSettings() {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiModel, setAiModel] = useState("gpt-4o-mini");
   const [aiPrompt, setAiPrompt] = useState("");
+  const [assistantName, setAssistantName] = useState("Assistente Virtual");
+  const [personality, setPersonality] = useState("Profissional");
+  const [humanPause, setHumanPause] = useState("30 minutos");
+  const [clientPause, setClientPause] = useState("5 minutos");
+  const [greetingMessage, setGreetingMessage] = useState("Olá! Sou o assistente virtual da clínica. Como posso ajudá-lo hoje?");
+  const [closingMessage, setClosingMessage] = useState("Foi um prazer atendê-lo! Se precisar de algo mais, estou à disposição.");
+  const [reminders, setReminders] = useState({ first: "15 minutos antes", second: "1 hora antes", third: "1 dia antes" });
+  const [followUps, setFollowUps] = useState({ first: "1 hora após a última mensagem não respondida", second: "1 dia após a última mensagem não respondida", third: "3 dias após a última mensagem não respondida" });
+
 
   // Connection State
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -117,6 +126,14 @@ export default function WhatsappSettings() {
       setAiEnabled(aiConfig.enabled || false);
       setAiModel(aiConfig.model || "gpt-3.5-turbo");
       setAiPrompt(aiConfig.prompt || "Você é um assistente virtual de um estabelecimento...");
+      if (aiConfig.assistantName) setAssistantName(aiConfig.assistantName);
+      if (aiConfig.personality) setPersonality(aiConfig.personality);
+      if (aiConfig.humanPause) setHumanPause(aiConfig.humanPause);
+      if (aiConfig.clientPause) setClientPause(aiConfig.clientPause);
+      if (aiConfig.greetingMessage) setGreetingMessage(aiConfig.greetingMessage);
+      if (aiConfig.closingMessage) setClosingMessage(aiConfig.closingMessage);
+      if (aiConfig.reminders) setReminders(aiConfig.reminders);
+      if (aiConfig.followUps) setFollowUps(aiConfig.followUps);
     }
   }, [settings]);
 
@@ -130,6 +147,14 @@ export default function WhatsappSettings() {
         enabled: aiEnabled,
         model: aiModel,
         prompt: aiPrompt,
+        assistantName,
+        personality,
+        humanPause,
+        clientPause,
+        greetingMessage,
+        closingMessage,
+        reminders,
+        followUps,
       },
     });
   };
@@ -145,10 +170,14 @@ export default function WhatsappSettings() {
       <div className="container mx-auto p-6 max-w-4xl space-y-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">WhatsApp & IA Agent</h1>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                  <Bot className="w-8 h-8 text-yellow-500" /> Agent IA
+                </h1>
+              </div>
               <p className="text-muted-foreground mt-2">
-                Configure a integração com Evolution API e seu Agente de Inteligência Artificial.
+                Configurações do seu assistente virtual
               </p>
             </div>
           </div>
@@ -309,55 +338,220 @@ export default function WhatsappSettings() {
 
           {/* AI AGENT TAB */}
           <TabsContent value="agent" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Configuração do Agente IA</CardTitle>
-                <CardDescription>
-                  Defina como a Inteligência Artificial deve interagir com seus clientes.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Habilitar Agente IA</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Permitir que a IA responda mensagens automaticamente.
-                    </p>
+            <div className="flex flex-col gap-6">
+
+              <div className="flex items-center justify-between p-4 border border-border/40 rounded-xl bg-card">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <Bot className="w-5 h-5 text-primary" />
+                    <Label className="text-base font-medium">Habilitar Agente IA</Label>
                   </div>
-                  <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+                  <p className="text-sm text-muted-foreground">Permitir que a IA responda mensagens automaticamente.</p>
+                </div>
+                <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+              </div>
+
+              {/* Main settings grid */}
+              <div className="grid gap-6">
+
+                {/* Configurações do Atendimento */}
+                <div className="border border-border/40 rounded-xl bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-border/40 bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <Bot className="w-5 h-5 text-primary" />
+                      <h3 className="font-semibold text-lg">Configurações do Atendimento</h3>
+                    </div>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Edit2 className="w-4 h-4" /> Editar
+                    </Button>
+                  </div>
+
+                  <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2 text-muted-foreground font-normal">
+                          <Bot className="w-4 h-4" /> Nome do Agent
+                        </Label>
+                        <Input
+                          value={assistantName}
+                          onChange={(e) => setAssistantName(e.target.value)}
+                          className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2 text-muted-foreground font-normal">
+                          <UserCircle className="w-4 h-4" /> Personalidade
+                        </Label>
+                        <Input
+                          value={personality}
+                          onChange={(e) => setPersonality(e.target.value)}
+                          className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2 text-muted-foreground font-normal">
+                          <Clock className="w-4 h-4" /> Tempo de Pausa
+                        </Label>
+                        <Input
+                          value={humanPause}
+                          onChange={(e) => setHumanPause(e.target.value)}
+                          className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                        />
+                        <p className="text-xs text-muted-foreground">Pausa quando atendente humano assume</p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2 text-muted-foreground font-normal">
+                          <Clock className="w-4 h-4" /> Pausa por Solicitação
+                        </Label>
+                        <Input
+                          value={clientPause}
+                          onChange={(e) => setClientPause(e.target.value)}
+                          className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                        />
+                        <p className="text-xs text-muted-foreground">Pausa quando cliente solicita</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-6 pt-4">
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2 text-muted-foreground font-normal">
+                          <MessageSquare className="w-4 h-4" /> Mensagem de Saudação
+                        </Label>
+                        <Textarea
+                          value={greetingMessage}
+                          onChange={(e) => setGreetingMessage(e.target.value)}
+                          className="resize-none font-medium h-20"
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2 text-muted-foreground font-normal">
+                          <MessageSquare className="w-4 h-4" /> Mensagem de Finalização
+                        </Label>
+                        <Textarea
+                          value={closingMessage}
+                          onChange={(e) => setClosingMessage(e.target.value)}
+                          className="resize-none font-medium h-20"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="model">Modelo (OpenAI)</Label>
-                  <Input
-                    id="model"
-                    value={aiModel}
-                    onChange={(e) => setAiModel(e.target.value)}
-                    placeholder="gpt-4o-mini"
-                  />
+                {/* Lembretes de Agendamento */}
+                <div className="border border-border/40 rounded-xl bg-card overflow-hidden">
+                  <div className="flex items-center gap-2 px-6 py-4 border-b border-border/40 bg-muted/20">
+                    <Bell className="w-5 h-5 text-primary" />
+                    <h3 className="font-semibold text-lg">Lembretes de Agendamento</h3>
+                  </div>
+                  <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground text-sm font-normal">1º Lembrete</Label>
+                      <Input
+                        value={reminders.first}
+                        onChange={(e) => setReminders({ ...reminders, first: e.target.value })}
+                        className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground text-sm font-normal">2º Lembrete</Label>
+                      <Input
+                        value={reminders.second}
+                        onChange={(e) => setReminders({ ...reminders, second: e.target.value })}
+                        className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground text-sm font-normal">3º Lembrete</Label>
+                      <Input
+                        value={reminders.third}
+                        onChange={(e) => setReminders({ ...reminders, third: e.target.value })}
+                        className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="prompt">Prompt do Sistema</Label>
-                  <Textarea
-                    id="prompt"
-                    className="min-h-[200px] font-mono text-sm"
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Você é um assistente do estabelecimento..."
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Instruções detalhadas sobre como o agente deve se comportar, horários, serviços, etc.
-                  </p>
+                {/* Follow Up */}
+                <div className="border border-border/40 rounded-xl bg-card overflow-hidden">
+                  <div className="flex items-center gap-2 px-6 py-4 border-b border-border/40 bg-muted/20">
+                    <Clock className="w-5 h-5 text-primary" />
+                    <h3 className="font-semibold text-lg">Follow Up</h3>
+                  </div>
+                  <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground text-sm font-normal">1º Follow Up</Label>
+                      <Input
+                        value={followUps.first}
+                        onChange={(e) => setFollowUps({ ...followUps, first: e.target.value })}
+                        className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground text-sm font-normal">2º Follow Up</Label>
+                      <Input
+                        value={followUps.second}
+                        onChange={(e) => setFollowUps({ ...followUps, second: e.target.value })}
+                        className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground text-sm font-normal">3º Follow Up</Label>
+                      <Input
+                        value={followUps.third}
+                        onChange={(e) => setFollowUps({ ...followUps, third: e.target.value })}
+                        className="font-medium text-base border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary shadow-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </CardContent>
-              <CardFooter className="justify-end border-t px-6 py-4">
-                <Button onClick={handleSaveSettings} disabled={updateSettings.isPending}>
+
+                {/* Advanced Config */}
+                <Card className="border-border/40 overflow-hidden shadow-sm">
+                  <CardHeader className="bg-muted/20 pb-4">
+                    <CardTitle className="text-lg flex items-center gap-2"><Bot className="w-5 h-5" /> Configurações Avançadas de IA</CardTitle>
+                    <CardDescription>
+                      Prompt do sistema e modelo base para a Inteligência Artificial.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6 pt-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="model">Modelo (OpenAI)</Label>
+                      <Input
+                        id="model"
+                        value={aiModel}
+                        onChange={(e) => setAiModel(e.target.value)}
+                        placeholder="gpt-4o-mini"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="prompt">Prompt do Sistema</Label>
+                      <Textarea
+                        id="prompt"
+                        className="min-h-[200px] font-mono text-sm"
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        placeholder="Você é um assistente do estabelecimento..."
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Instruções detalhadas sobre como o agente deve se comportar, horários, serviços, etc.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+              </div>
+
+              <div className="flex justify-end mt-4">
+                <Button onClick={handleSaveSettings} disabled={updateSettings.isPending} size="lg" className="px-8">
                   {updateSettings.isPending && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                  Salvar Configurações de IA
+                  Salvar Configurações
                 </Button>
-              </CardFooter>
-            </Card>
+              </div>
+
+            </div>
           </TabsContent>
 
           {/* WEBHOOK TAB */}
