@@ -40,7 +40,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Shield, Building2, UserPlus, Pencil, Trash2, KeyRound, Copy, LogOut, Info, Calendar, Phone, User, Upload, Workflow, MessageSquare, CheckCircle, Database } from "lucide-react";
+import { Loader2, Shield, Building2, UserPlus, Pencil, Trash2, KeyRound, Copy, LogOut, Info, Calendar, Phone, User } from "lucide-react";
 
 // Generate a random password of given length
 function generatePassword(length = 12): string {
@@ -70,7 +70,6 @@ export default function SuperAdmin() {
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
     const { data: owners, isLoading, refetch } = trpc.admin.listOwners.useQuery();
-    const { data: masterWhatsapp } = trpc.whatsapp.getSettings.useQuery();
 
     const updateEst = trpc.admin.updateEstablishment.useMutation({
         onSuccess: () => {
@@ -178,118 +177,22 @@ export default function SuperAdmin() {
     if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
 
     return (
-        <div className="p-8 space-y-8 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                        <Database className="h-6 w-6 text-purple-500" />
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-tight">Painel Administrativo</h1>
-                </div>
-                <div className="flex items-center gap-4">
-                    <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+        <div className="p-8 space-y-8">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold flex items-center gap-2">
+                        <Shield className="h-8 w-8 text-primary" />
                         Super Admin
-                    </span>
-                    <Button variant="outline" size="sm" onClick={() => setIsUserOpen(true)}>
+                    </h1>
+                    <p className="text-muted-foreground">Gerencie donos e estabelecimentos.</p>
+                </div>
+                <div className="flex gap-2">
+                    <Button onClick={() => setIsUserOpen(true)}>
                         <UserPlus className="mr-2 h-4 w-4" /> Novo Usuário
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground">
+                    <Button variant="outline" onClick={logout}>
                         <LogOut className="mr-2 h-4 w-4" /> Sair
                     </Button>
-                </div>
-            </div>
-
-            {/* Adicionar Logo */}
-            <div className="space-y-3">
-                <Label className="text-base">Adicionar Logo</Label>
-                <div className="border-2 border-dashed border-border/40 rounded-xl bg-card/50 p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-muted/20 transition-colors">
-                    <Upload className="h-6 w-6 text-muted-foreground mb-4" />
-                    <p className="text-sm text-muted-foreground">Clique para fazer upload ou arraste uma imagem</p>
-                </div>
-                <p className="text-xs text-muted-foreground">PNG, JPG ou SVG. Máximo 2MB. Recomendado: 200x200px</p>
-            </div>
-
-            {/* Automações e Workflows */}
-            <div className="pt-6 border-t border-border/20">
-                <div className="mb-4">
-                    <h2 className="text-xl font-semibold flex items-center gap-2">
-                        Automações e Workflows
-                    </h2>
-                    <p className="text-sm text-muted-foreground">Configure fluxos de trabalho automatizados para esta organização</p>
-                </div>
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
-                    <Workflow className="h-4 w-4" /> Criar Workflow
-                </Button>
-            </div>
-
-            {/* Instância WhatsApp */}
-            <div className="pt-8 border-t border-border/20">
-                <div className="mb-6 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-semibold flex items-center gap-2">
-                            <MessageSquare className="h-5 w-5 text-green-500" />
-                            Instância WhatsApp
-                        </h2>
-                        <p className="text-sm text-muted-foreground">Informações de conexão do WhatsApp desta organização</p>
-                    </div>
-                </div>
-
-                <div className="space-y-6 max-w-3xl">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Status:</span>
-                        <div className="bg-green-500/10 text-green-500 border border-green-500/20 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3" /> Conectado
-                        </div>
-                    </div>
-
-                    <div className="space-y-3 pt-4 border-t border-border/10">
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Nome da Instância:</span>
-                            <span className="font-medium text-foreground">{masterWhatsapp?.instanceName || "clinica-youtube"}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Empresa:</span>
-                            <span className="font-medium text-foreground">Clinica Youtube</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Telefone:</span>
-                            <span className="font-medium px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded">(11) 98851-6536</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Instance ID:</span>
-                            <span className="font-mono text-muted-foreground text-xs">rcc251cb915dee9</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Token:</span>
-                            <span className="font-mono text-muted-foreground text-xs">f5880c60-4a09-48b2-bab5-72af7fce2dee</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Criado em:</span>
-                            <span className="font-medium">15/01/2026, 15:59:01</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Atualizado em:</span>
-                            <span className="font-medium">15/01/2026, 16:03:01</span>
-                        </div>
-                    </div>
-
-                    <div className="pt-4">
-                        <div className="bg-card border border-border/40 rounded-lg p-4 flex items-center gap-3">
-                            <div className="p-2 bg-muted/30 flex items-center justify-center rounded-md">
-                                <Database className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <span className="text-sm font-medium">Webhook Configurado</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="pt-12 border-t border-border/20">
-                <div className="mb-4">
-                    <h2 className="text-xl font-semibold flex items-center gap-2">
-                        <User className="h-5 w-5" /> Cadastros da Plataforma
-                    </h2>
-                    <p className="text-sm text-muted-foreground">Gerencie todos os donos e estabelecimentos do sistema.</p>
                 </div>
             </div>
 
