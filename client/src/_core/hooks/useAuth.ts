@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
+import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
@@ -7,6 +8,12 @@ type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
   redirectPath?: string;
 };
+
+function isTokenRejected(error: unknown): boolean {
+  if (!(error instanceof TRPCClientError)) return false;
+  const code = (error.data as any)?.code;
+  return code === "UNAUTHORIZED" || code === "FORBIDDEN";
+}
 
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
@@ -47,14 +54,21 @@ export function useAuth(options?: UseAuthOptions) {
     await supabase.auth.signOut();
     setSession(null);
     signingOut.current = false;
-    // Navigate to login page immediately to avoid 404 flash
     window.location.href = "/login";
   }, []);
 
-  // Auto sign-out if session exists but user was deleted from DB
+  // Auto sign-out only when the token is explicitly rejected (401/403).
+  // Server errors (500, missing env vars, DB down) are surfaced via `error`
+  // instead of silently kicking the user out.
   useEffect(() => {
-    if (session && meQuery.error && !meQuery.isLoading && !signingOut.current) {
-      console.warn("[Auth] Session exists but user not found in DB. Signing out.");
+    if (
+      session &&
+      meQuery.error &&
+      !meQuery.isLoading &&
+      !signingOut.current &&
+      isTokenRejected(meQuery.error)
+    ) {
+      console.warn("[Auth] Token rejected by server. Signing out.");
       signingOut.current = true;
       supabase.auth.signOut().then(() => {
         setSession(null);
@@ -75,12 +89,12 @@ export function useAuth(options?: UseAuthOptions) {
       };
     }
     const user = session ? (meQuery.data ?? null) : null;
-    const hasError = !!meQuery.error && !meQuery.isLoading;
+    const authError = meQuery.error && !meQuery.isLoading ? meQuery.error : null;
     return {
       user,
       loading: loading || (!!session && meQuery.isLoading),
-      error: meQuery.error ?? null,
-      isAuthenticated: Boolean(session) && !hasError && !!user,
+      error: authError,
+      isAuthenticated: Boolean(session) && !authError && !!user,
       session,
     };
   }, [session, meQuery.data, meQuery.error, meQuery.isLoading, loading]);

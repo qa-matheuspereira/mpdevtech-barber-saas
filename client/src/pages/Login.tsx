@@ -12,7 +12,7 @@ export default function Login() {
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [loginLoading, setLoginLoading] = useState(false);
-    const { isAuthenticated, user, loading: authLoading, logout } = useAuth();
+    const { isAuthenticated, user, loading: authLoading, error: authError } = useAuth();
     const [, navigate] = useLocation();
 
     useEffect(() => {
@@ -100,9 +100,11 @@ export default function Login() {
                                 />
                             </div>
 
-                            {error && (
+                            {(error || authError) && (
                                 <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                                    <p className="text-sm text-red-400">{error}</p>
+                                    <p className="text-sm text-red-400">
+                                        {error || (authError ? `Erro no servidor: ${authError.message}` : null)}
+                                    </p>
                                 </div>
                             )}
 
