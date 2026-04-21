@@ -1,4 +1,4 @@
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { establishments, services } from "../../drizzle/schema";
@@ -6,6 +6,34 @@ import { eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 export const establishmentRouter = router({
+  // Public: get establishment by ID for booking page
+  getPublic: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [establishment] = await db
+        .select({
+          id: establishments.id,
+          name: establishments.name,
+          description: establishments.description,
+          operatingMode: establishments.operatingMode,
+          openTime: establishments.openTime,
+          closeTime: establishments.closeTime,
+          closedDays: establishments.closedDays,
+          city: establishments.city,
+          state: establishments.state,
+        })
+        .from(establishments)
+        .where(eq(establishments.id, input.id))
+        .limit(1);
+
+      if (!establishment) throw new TRPCError({ code: "NOT_FOUND", message: "Estabelecimento não encontrado" });
+
+      return establishment;
+    }),
+
   // List establishments for the owner
   list: protectedProcedure.query(async ({ ctx }) => {
     if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -148,7 +176,9 @@ export const establishmentRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      // TODO: Verify barbershop ownership
+      const { getEstablishmentById } = await import("../db");
+      const existing = await getEstablishmentById(input.establishmentId, ctx.user.id);
+      if (!existing) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado a este estabelecimento" });
 
       // Validate times
       const [openHour, openMin] = input.openTime.split(":").map(Number);

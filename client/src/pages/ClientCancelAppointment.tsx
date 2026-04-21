@@ -1,230 +1,192 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertCircle, Calendar, Clock, Scissors, X } from "lucide-react";
-
-interface Appointment {
-  id: number;
-  clientName: string;
-  serviceName: string;
-  appointmentDate: string;
-  appointmentTime: string;
-  status: "confirmed" | "waiting";
-  barbershopName: string;
-}
+import { AlertCircle, Calendar, Clock, Scissors, CheckCircle2, Loader2, X } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 export default function ClientCancelAppointment() {
-  const [appointments, setAppointments] = useState<Appointment[]>([
-    {
-      id: 1,
-      clientName: "João Silva",
-      serviceName: "Corte + Barba",
-      appointmentDate: "2026-02-05",
-      appointmentTime: "14:30",
-      status: "confirmed",
-      barbershopName: "Estabelecimento do João",
-    },
-    {
-      id: 2,
-      clientName: "João Silva",
-      serviceName: "Corte",
-      appointmentDate: "2026-02-10",
-      appointmentTime: "10:00",
-      status: "confirmed",
-      barbershopName: "Corte & Estilo",
-    },
-  ]);
+  const params = new URLSearchParams(window.location.search);
+  const appointmentId = parseInt(params.get("id") ?? "0");
+  const clientPhone = params.get("phone") ?? "";
 
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
 
-  const handleCancelAppointment = () => {
-    if (!selectedAppointment) return;
+  const { data: appointment, isLoading, error } = trpc.appointments.getByIdPublic.useQuery(
+    { appointmentId, clientPhone },
+    { enabled: appointmentId > 0 && clientPhone.length > 0, retry: false }
+  );
 
+  const cancelMutation = trpc.appointments.cancelByClient.useMutation({
+    onSuccess: () => {
+      setCancelled(true);
+      toast.success("Agendamento cancelado com sucesso!");
+    },
+    onError: (err) => toast.error(err.message || "Erro ao cancelar agendamento"),
+  });
+
+  const handleCancel = () => {
     if (!cancelReason.trim()) {
       toast.error("Por favor, informe o motivo do cancelamento");
       return;
     }
-
-    // Remove appointment from list
-    setAppointments(appointments.filter((apt) => apt.id !== selectedAppointment.id));
-
-    toast.success("Agendamento cancelado com sucesso!");
-    setIsDialogOpen(false);
-    setCancelReason("");
-    setSelectedAppointment(null);
+    cancelMutation.mutate({ appointmentId, clientPhone, reason: cancelReason });
   };
 
-  const openCancelDialog = (appointment: Appointment) => {
-    setSelectedAppointment(appointment);
-    setCancelReason("");
-    setIsDialogOpen(true);
-  };
+  if (!appointmentId || !clientPhone) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 flex items-center justify-center">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6 text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+            <p className="font-semibold">Link inválido</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              O link de cancelamento está incompleto. Verifique o link no seu WhatsApp.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error || !appointment) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 flex items-center justify-center">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6 text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+            <p className="font-semibold">Agendamento não encontrado</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Não foi possível localizar o agendamento. Verifique o link.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (cancelled || appointment.status === "cancelled") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 flex items-center justify-center">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6 text-center space-y-3">
+            <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+            <p className="font-semibold text-lg">Agendamento Cancelado</p>
+            <p className="text-sm text-muted-foreground">
+              Seu agendamento foi cancelado com sucesso. Obrigado por avisar!
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const scheduledDate = appointment.scheduledTime ? new Date(appointment.scheduledTime) : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Header */}
+      <div className="max-w-lg mx-auto space-y-6">
         <div className="text-center">
-          <h1 className="text-4xl font-bold">Meus Agendamentos</h1>
-          <p className="text-muted-foreground mt-2">Gerencie seus agendamentos e cancelamentos</p>
+          <h1 className="text-3xl font-bold">Cancelar Agendamento</h1>
+          <p className="text-muted-foreground mt-2">Confirme o cancelamento do seu agendamento</p>
         </div>
 
-        {/* Alert */}
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Você pode cancelar agendamentos até 2 horas antes do horário marcado.
+            Cancele com pelo menos 2 horas de antecedência para evitar taxas.
           </AlertDescription>
         </Alert>
 
-        {/* Appointments List */}
-        <div className="space-y-4">
-          {appointments.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <p className="text-muted-foreground">Você não tem agendamentos confirmados</p>
-              </CardContent>
-            </Card>
-          ) : (
-            appointments.map((appointment) => (
-              <Card key={appointment.id} className="hover:shadow-lg transition-shadow">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold">
-                          {appointment.barbershopName.charAt(0).toUpperCase()}
-                        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Detalhes do Agendamento</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                {(appointment.establishmentName ?? "E").charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold">{appointment.establishmentName}</p>
+                <p className="text-sm text-muted-foreground">Estabelecimento</p>
+              </div>
+            </div>
 
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg">{appointment.barbershopName}</h3>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                            <div className="flex items-center gap-1">
-                              <Scissors className="w-4 h-4" />
-                              {appointment.serviceName}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {new Date(appointment.appointmentDate).toLocaleDateString("pt-BR")}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {appointment.appointmentTime}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
-                        {appointment.status === "confirmed" ? "Confirmado" : "Aguardando"}
-                      </span>
-
-                      <Dialog open={isDialogOpen && selectedAppointment?.id === appointment.id} onOpenChange={setIsDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => openCancelDialog(appointment)}
-                            className="flex items-center gap-2"
-                          >
-                            <X className="w-4 h-4" />
-                            Cancelar
-                          </Button>
-                        </DialogTrigger>
-
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Cancelar Agendamento</DialogTitle>
-                            <DialogDescription>
-                              Tem certeza que deseja cancelar este agendamento?
-                            </DialogDescription>
-                          </DialogHeader>
-
-                          <div className="space-y-4">
-                            <Card className="bg-slate-50">
-                              <CardContent className="pt-4">
-                                <div className="space-y-2 text-sm">
-                                  <div>
-                                    <p className="text-muted-foreground">Estabelecimento</p>
-                                    <p className="font-semibold">{selectedAppointment?.barbershopName}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Serviço</p>
-                                    <p className="font-semibold">{selectedAppointment?.serviceName}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Data e Hora</p>
-                                    <p className="font-semibold">
-                                      {selectedAppointment &&
-                                        new Date(selectedAppointment.appointmentDate).toLocaleDateString("pt-BR")}{" "}
-                                      às {selectedAppointment?.appointmentTime}
-                                    </p>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="reason">Motivo do cancelamento *</Label>
-                              <Textarea
-                                id="reason"
-                                placeholder="Informe o motivo do cancelamento..."
-                                value={cancelReason}
-                                onChange={(e) => setCancelReason(e.target.value)}
-                                rows={4}
-                              />
-                            </div>
-
-                            <Alert>
-                              <AlertCircle className="h-4 w-4" />
-                              <AlertDescription>
-                                Ao cancelar, o estabelecimento será notificado e você poderá agendar novamente.
-                              </AlertDescription>
-                            </Alert>
-
-                            <div className="flex gap-3 justify-end">
-                              <Button
-                                variant="outline"
-                                onClick={() => setIsDialogOpen(false)}
-                              >
-                                Manter Agendamento
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                onClick={handleCancelAppointment}
-                              >
-                                Confirmar Cancelamento
-                              </Button>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {appointment.serviceName && (
+                <div className="flex items-center gap-2 p-2 bg-slate-50 rounded">
+                  <Scissors className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">{appointment.serviceName}</p>
+                    <p className="text-muted-foreground text-xs">Serviço</p>
                   </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+                </div>
+              )}
+              {scheduledDate && (
+                <div className="flex items-center gap-2 p-2 bg-slate-50 rounded">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">{scheduledDate.toLocaleDateString("pt-BR")}</p>
+                    <p className="text-muted-foreground text-xs">Data</p>
+                  </div>
+                </div>
+              )}
+              {scheduledDate && (
+                <div className="flex items-center gap-2 p-2 bg-slate-50 rounded">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">
+                      {scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    <p className="text-muted-foreground text-xs">Horário</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Info Section */}
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reason">Motivo do cancelamento *</Label>
+              <Textarea
+                id="reason"
+                placeholder="Informe o motivo do cancelamento..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <Button
+              variant="destructive"
+              className="w-full flex items-center gap-2"
+              onClick={handleCancel}
+              disabled={cancelMutation.isPending}
+            >
+              {cancelMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <X className="w-4 h-4" />
+              )}
+              Confirmar Cancelamento
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Política de Cancelamento</CardTitle>
@@ -236,11 +198,11 @@ export default function ClientCancelAppointment() {
             </div>
             <div>
               <p className="font-semibold">Cancelamento com Taxa</p>
-              <p className="text-muted-foreground">Cancelamentos com menos de 2 horas podem ter taxa de 50% do valor</p>
+              <p className="text-muted-foreground">Cancelamentos com menos de 2 horas podem ter taxa de 50%</p>
             </div>
             <div>
               <p className="font-semibold">Remarcação</p>
-              <p className="text-muted-foreground">Você pode remarcar seu agendamento gratuitamente a qualquer momento</p>
+              <p className="text-muted-foreground">Você pode remarcar gratuitamente a qualquer momento</p>
             </div>
           </CardContent>
         </Card>

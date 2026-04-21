@@ -1,25 +1,49 @@
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { services } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { services, establishments } from "../../drizzle/schema";
+import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
+async function verifyEstablishmentOwnership(establishmentId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  const [establishment] = await db
+    .select({ id: establishments.id })
+    .from(establishments)
+    .where(and(eq(establishments.id, establishmentId), eq(establishments.ownerId, userId)))
+    .limit(1);
+
+  if (!establishment) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado a este estabelecimento" });
+  }
+}
+
 export const serviceRouter = router({
-  // List services for a barbershop
   list: protectedProcedure
-    .input(z.object({
-      establishmentId: z.number(),
-    }))
+    .input(z.object({ establishmentId: z.number() }))
     .query(async ({ ctx, input }) => {
       if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      return db.select().from(services).where(eq(services.establishmentId, input.establishmentId));
+      return db.select().from(services).where(
+        and(eq(services.establishmentId, input.establishmentId), eq(services.isActive, true))
+      );
     }),
 
-  // Create service
+  listPublic: publicProcedure
+    .input(z.object({ establishmentId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      return db.select().from(services).where(
+        and(eq(services.establishmentId, input.establishmentId), eq(services.isActive, true))
+      );
+    }),
+
   create: protectedProcedure
     .input(z.object({
       establishmentId: z.number(),
@@ -30,10 +54,10 @@ export const serviceRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+      await verifyEstablishmentOwnership(input.establishmentId, ctx.user.id);
+
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-
-      // TODO: Verify barbershop ownership
 
       const result = await db.insert(services).values({
         establishmentId: input.establishmentId,
@@ -41,12 +65,11 @@ export const serviceRouter = router({
         description: input.description,
         durationMinutes: input.durationMinutes,
         price: input.price,
-      });
+      }).returning({ id: services.id });
 
-      return result;
+      return result[0];
     }),
 
-  // Update service
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
@@ -59,36 +82,32 @@ export const serviceRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+      await verifyEstablishmentOwnership(input.establishmentId, ctx.user.id);
+
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-
-      // TODO: Verify barbershop ownership
 
       const { id, establishmentId, ...updateData } = input;
-      const result = await db.update(services)
-        .set(updateData)
-        .where(eq(services.id, id));
+      await db.update(services).set(updateData).where(
+        and(eq(services.id, id), eq(services.establishmentId, establishmentId))
+      );
 
-      return result;
+      return { success: true };
     }),
 
-  // Delete service
   delete: protectedProcedure
-    .input(z.object({
-      id: z.number(),
-      establishmentId: z.number(),
-    }))
+    .input(z.object({ id: z.number(), establishmentId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+      await verifyEstablishmentOwnership(input.establishmentId, ctx.user.id);
+
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      // TODO: Verify barbershop ownership
+      await db.update(services).set({ isActive: false }).where(
+        and(eq(services.id, input.id), eq(services.establishmentId, input.establishmentId))
+      );
 
-      const result = await db.update(services)
-        .set({ isActive: false })
-        .where(eq(services.id, input.id));
-
-      return result;
+      return { success: true };
     }),
 });

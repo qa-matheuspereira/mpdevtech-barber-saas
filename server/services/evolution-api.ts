@@ -60,6 +60,24 @@ export class EvolutionApiService {
     }
 
     /**
+     * Request pairing code (connect without QR — mobile friendly)
+     * Phone number format: country code + DDD + number, e.g. 5511999999999
+     */
+    async requestPairingCode(instanceName: string, phoneNumber: string) {
+        try {
+            const response = await axios.post(
+                `${this.apiUrl}/instance/pairingCode/${instanceName}`,
+                { number: phoneNumber.replace(/\D/g, "") },
+                { headers: this.headers }
+            );
+            return response.data as { pairingCode: string };
+        } catch (error: any) {
+            console.error("Error requesting pairing code:", error.response?.data || error.message);
+            throw new Error(error.response?.data?.message || "Failed to request pairing code");
+        }
+    }
+
+    /**
      * Connect instance (Get QR Code)
      */
     async connectInstance(instanceName: string) {

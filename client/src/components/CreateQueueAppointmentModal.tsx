@@ -38,16 +38,19 @@ export default function CreateQueueAppointmentModal({
   const [error, setError] = useState<string | null>(null);
 
   // Fetch services
-  const { data: services = [] } = trpc.service.list.useQuery(
+  const { data: services = [] } = trpc.services.list.useQuery(
     { establishmentId },
     { enabled: !!establishmentId }
   );
 
-  // TODO: Fetch clients from database when client router is available
-  const clients: any[] = [];
+  // Fetch clients
+  const { data: clients = [] } = trpc.clients.list.useQuery(
+    { establishmentId },
+    { enabled: !!establishmentId }
+  );
 
   // Add to queue mutation
-  const addToQueueMutation = trpc.appointment.addToQueue.useMutation({
+  const addToQueueMutation = trpc.appointments.addToQueue.useMutation({
     onSuccess: () => {
       toast.success("Cliente adicionado à fila com sucesso!");
       setFormData({ clientId: "", serviceId: "", notes: "" });
@@ -114,14 +117,21 @@ export default function CreateQueueAppointmentModal({
           {/* Client Selection */}
           <div className="space-y-2">
             <Label htmlFor="client">Cliente *</Label>
-            <Input
-              id="client"
-              placeholder="ID do cliente"
-              type="number"
+            <Select
               value={formData.clientId}
-              onChange={(e) => handleInputChange("clientId", e.target.value)}
-              required
-            />
+              onValueChange={(value) => handleInputChange("clientId", value)}
+            >
+              <SelectTrigger id="client">
+                <SelectValue placeholder="Selecione um cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client: any) => (
+                  <SelectItem key={client.id} value={client.id.toString()}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Service Selection */}

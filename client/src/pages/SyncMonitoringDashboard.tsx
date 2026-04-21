@@ -101,7 +101,7 @@ export default function SyncMonitoringDashboard() {
   };
 
   const successRate = stats && stats.totalEvents > 0
-    ? Math.round((stats.totalSuccessful / stats.totalEvents) * 100)
+    ? Math.round((stats.successfulEvents / stats.totalEvents) * 100)
     : 0;
 
   return (
@@ -206,7 +206,7 @@ export default function SyncMonitoringDashboard() {
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{successRate}%</div>
               <p className="text-xs text-muted-foreground mt-1">
-                {stats.totalSuccessful} de {stats.totalEvents} eventos
+                {stats.successfulEvents} de {stats.totalEvents} eventos
               </p>
             </CardContent>
           </Card>
@@ -221,7 +221,7 @@ export default function SyncMonitoringDashboard() {
             <CardContent>
               <div className="text-2xl font-bold text-red-600">{stats.failedSyncs}</div>
               <p className="text-xs text-muted-foreground mt-1">
-                {stats.totalErrors} eventos com erro
+                {stats.failedEvents} eventos com erro
               </p>
             </CardContent>
           </Card>
@@ -237,8 +237,8 @@ export default function SyncMonitoringDashboard() {
               <div className="text-2xl font-bold">{stats.averageDuration}ms</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Última sincronização:{" "}
-                {stats.lastSync
-                  ? format(new Date(stats.lastSync), "HH:mm", { locale: ptBR })
+                {stats.lastSyncAt
+                  ? format(new Date(stats.lastSyncAt), "HH:mm", { locale: ptBR })
                   : "Nunca"}
               </p>
             </CardContent>
@@ -265,10 +265,6 @@ export default function SyncMonitoringDashboard() {
               <div className="text-center">
                 <div className="text-3xl font-bold text-red-600">{stats.failedSyncs}</div>
                 <p className="text-sm text-muted-foreground">Falhadas</p>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-yellow-600">{stats.partialSyncs}</div>
-                <p className="text-sm text-muted-foreground">Parciais</p>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600">{stats.totalEvents}</div>

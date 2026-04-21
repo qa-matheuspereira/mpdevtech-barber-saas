@@ -17,21 +17,26 @@ export default function WhatsappSessionManager({
 }: WhatsappSessionManagerProps) {
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
 
-  // List sessions query
-  const { data: sessions, isLoading, refetch } = trpc.whatsapp.listSessions.useQuery({
-    establishmentId,
-  });
+  // Get instance settings
+  const { data: settings, isLoading, refetch } = trpc.whatsapp.getSettings.useQuery(
+    { establishmentId }
+  );
 
-  // Get active session query
-  const { data: activeSession } = trpc.whatsapp.getActiveSession.useQuery({
-    establishmentId,
-  });
+  // Check connection status (polls every 30s when instance exists)
+  const { data: connectionData, refetch: refetchStatus } = trpc.whatsapp.checkConnectionStatus.useQuery(
+    { establishmentId },
+    { enabled: !!settings, refetchInterval: 30000 }
+  );
+
+  const connectionState = (connectionData as any)?.instance?.state;
+  const isConnected = connectionState === "open";
 
   // Disconnect mutation
   const disconnectMutation = trpc.whatsapp.disconnectSession.useMutation({
     onSuccess: () => {
       toast.success("WhatsApp desconectado");
       refetch();
+      refetchStatus();
     },
     onError: () => {
       toast.error("Erro ao desconectar WhatsApp");
@@ -41,150 +46,119 @@ export default function WhatsappSessionManager({
   // Delete mutation
   const deleteMutation = trpc.whatsapp.deleteSession.useMutation({
     onSuccess: () => {
-      toast.success("Sessão deletada");
+      toast.success("Instância deletada");
       refetch();
+      refetchStatus();
     },
     onError: () => {
-      toast.error("Erro ao deletar sessão");
+      toast.error("Erro ao deletar instância");
     },
   });
 
-  const handleDisconnect = (sessionId: number) => {
-    disconnectMutation.mutate({ sessionId });
-  };
-
-  const handleDelete = (sessionId: number) => {
-    if (confirm("Tem certeza que deseja deletar esta sessão?")) {
-      deleteMutation.mutate({ sessionId });
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "connected":
+  const getStatusBadge = (state?: string) => {
+    switch (state) {
+      case "open":
         return <Badge className="bg-green-600">Conectado</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-600">Pendente</Badge>;
+      case "connecting":
+        return <Badge className="bg-yellow-600">Conectando</Badge>;
+      case "close":
       case "disconnected":
         return <Badge className="bg-gray-600">Desconectado</Badge>;
-      case "error":
-        return <Badge className="bg-red-600">Erro</Badge>;
       default:
-        return <Badge>{status}</Badge>;
+        return <Badge className="bg-gray-600">Desconhecido</Badge>;
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Active Session Status */}
-      {activeSession && (
+      {/* Active Connection Status */}
+      {isConnected && (
         <Alert className="border-green-200 bg-green-50">
           <MessageSquare className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            WhatsApp conectado: {activeSession.phoneNumber} • Sistema pronto para enviar mensagens
+            WhatsApp conectado • Sistema pronto para enviar mensagens
           </AlertDescription>
         </Alert>
       )}
 
-      {!activeSession && sessions && sessions.length === 0 && (
+      {!settings && !isLoading && (
         <Alert>
           <AlertDescription>
-            Nenhuma sessão WhatsApp conectada. Clique no botão abaixo para conectar.
+            Nenhuma instância WhatsApp configurada. Configure as credenciais da Evolution API e clique no botão abaixo para conectar.
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Sessions List */}
+      {/* Instance Card */}
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
-      ) : sessions && sessions.length > 0 ? (
-        <div className="space-y-4">
-          <h3 className="font-semibold">Sessões WhatsApp</h3>
-          {sessions.map((session) => (
-            <Card key={session.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-base">{session.sessionName}</CardTitle>
-                    <CardDescription>
-                      {session.phoneNumber || "Telefone não disponível"}
-                    </CardDescription>
-                  </div>
-                  {getStatusBadge(session.status)}
+      ) : settings ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-base">{settings.instanceName}</CardTitle>
+                <CardDescription>
+                  {settings.apiUrl || "URL não configurada"}
+                </CardDescription>
+              </div>
+              {getStatusBadge(connectionState)}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Status</p>
+                  <p className="font-medium capitalize">{connectionState || "Desconhecido"}</p>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {/* Session Info */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Status</p>
-                      <p className="font-medium capitalize">{session.status}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Ativo</p>
-                      <p className="font-medium">
-                        {session.isActive ? "Sim" : "Não"}
-                      </p>
-                    </div>
-                    {session.connectedAt && (
-                      <div>
-                        <p className="text-muted-foreground">Conectado em</p>
-                        <p className="font-medium text-xs">
-                          {new Date(session.connectedAt).toLocaleString("pt-BR")}
-                        </p>
-                      </div>
-                    )}
-                    {session.errorMessage && (
-                      <div className="col-span-2">
-                        <p className="text-muted-foreground">Erro</p>
-                        <p className="font-medium text-red-600 text-xs">
-                          {session.errorMessage}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <p className="text-muted-foreground">Ativo</p>
+                  <p className="font-medium">{settings.isActive ? "Sim" : "Não"}</p>
+                </div>
+              </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2">
-                    {session.isActive && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDisconnect(session.id)}
-                        disabled={disconnectMutation.isPending}
-                        className="gap-2"
-                      >
-                        {disconnectMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Power className="w-4 h-4" />
-                        )}
-                        Desconectar
-                      </Button>
+              <div className="flex gap-2 pt-2">
+                {isConnected && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => disconnectMutation.mutate({ establishmentId })}
+                    disabled={disconnectMutation.isPending}
+                    className="gap-2"
+                  >
+                    {disconnectMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Power className="w-4 h-4" />
                     )}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDelete(session.id)}
-                      disabled={deleteMutation.isPending}
-                      className="gap-2 ml-auto"
-                    >
-                      {deleteMutation.isPending ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                      Deletar
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    Desconectar
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    if (confirm("Tem certeza que deseja deletar esta instância?")) {
+                      deleteMutation.mutate({ establishmentId });
+                    }
+                  }}
+                  disabled={deleteMutation.isPending}
+                  className="gap-2 ml-auto"
+                >
+                  {deleteMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Deletar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       ) : null}
 
       {/* Connect Button */}
@@ -192,17 +166,27 @@ export default function WhatsappSessionManager({
         onClick={() => setIsConnectionModalOpen(true)}
         className="w-full gap-2"
         size="lg"
+        disabled={!settings}
       >
         <Plus className="w-4 h-4" />
-        Conectar WhatsApp
+        {isConnected ? "Reconectar WhatsApp" : "Conectar WhatsApp"}
       </Button>
+
+      {!settings && (
+        <p className="text-xs text-center text-muted-foreground">
+          Configure as credenciais da Evolution API na aba "Configurações" antes de conectar.
+        </p>
+      )}
 
       {/* Connection Modal */}
       <WhatsappConnectionModal
         open={isConnectionModalOpen}
         onOpenChange={setIsConnectionModalOpen}
         establishmentId={establishmentId}
-        onSuccess={() => refetch()}
+        onSuccess={() => {
+          refetch();
+          refetchStatus();
+        }}
       />
     </div>
   );

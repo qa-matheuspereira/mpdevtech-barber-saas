@@ -3,6 +3,18 @@ import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { verifySupabaseToken } from "./supabase";
 
+export const sdk = {
+  exchangeCodeForToken: async (_code: string, _state: string): Promise<{ accessToken: string }> => {
+    throw new Error("OAuth via SDK not supported — use Supabase Auth");
+  },
+  getUserInfo: async (_accessToken: string): Promise<{ openId: string; name?: string; email?: string; loginMethod?: string; platform?: string }> => {
+    throw new Error("OAuth via SDK not supported — use Supabase Auth");
+  },
+  createSessionToken: async (_openId: string, _opts?: unknown): Promise<string> => {
+    throw new Error("OAuth via SDK not supported — use Supabase Auth");
+  },
+};
+
 /**
  * Authenticate a request using Supabase Auth.
  * Extracts the Bearer token from the Authorization header,

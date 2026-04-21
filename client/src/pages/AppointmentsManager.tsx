@@ -4,20 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Clock, Users, CheckCircle, XCircle, AlertCircle, Calendar, Loader2, Search } from "lucide-react";
+import { Clock, Users, CheckCircle, XCircle, AlertCircle, Calendar, Loader2, Search, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import EditAppointmentModal from "@/components/EditAppointmentModal";
 import CreateQueueAppointmentModal from "@/components/CreateQueueAppointmentModal";
+import { useIsMobile } from "@/hooks/useMobile";
 
 
 export default function AppointmentsManager() {
+  const isMobile = useIsMobile();
   const [selectedEstablishment, setSelectedEstablishment] = useState<number | null>(null);
   const [operatingMode, setOperatingMode] = useState<"queue" | "scheduled" | "both">("both");
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,6 +29,7 @@ export default function AppointmentsManager() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [appointmentToEdit, setAppointmentToEdit] = useState<any | null>(null);
   const [isCreateQueueModalOpen, setIsCreateQueueModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("scheduled");
 
   // Fetch establishments
   const { data: establishments } = trpc.establishment.list.useQuery();
@@ -39,7 +41,7 @@ export default function AppointmentsManager() {
   );
 
   // Fetch appointments
-  const { data: appointments = [], isLoading: appointmentsLoading, refetch: refetchAppointments } = trpc.appointment.list.useQuery(
+  const { data: appointments = [], isLoading: appointmentsLoading, refetch: refetchAppointments } = trpc.appointments.list.useQuery(
     { establishmentId: selectedEstablishment || 0 },
     { enabled: !!selectedEstablishment }
   );
@@ -47,7 +49,7 @@ export default function AppointmentsManager() {
   // Sync appointments mutation
   const syncAppointmentsMutation = trpc.googleCalendar.syncAppointments.useMutation({
     onSuccess: (data) => {
-      toast.success(`${data.syncedCount} agendamentos sincronizados com Google Calendar`);
+      toast.success(data.message || "Agendamentos sincronizados com Google Calendar");
       setIsSyncingGoogle(false);
     },
     onError: (error) => {
@@ -57,7 +59,7 @@ export default function AppointmentsManager() {
   });
 
   // Update appointment status mutation
-  const updateStatusMutation = trpc.appointment.updateStatus.useMutation({
+  const updateStatusMutation = trpc.appointments.updateStatus.useMutation({
     onSuccess: () => {
       toast.success("Status do agendamento atualizado!");
       refetchAppointments();
@@ -69,7 +71,7 @@ export default function AppointmentsManager() {
   });
 
   // Cancel appointment mutation
-  const cancelMutation = trpc.appointment.cancel.useMutation({
+  const cancelMutation = trpc.appointments.cancel.useMutation({
     onSuccess: () => {
       toast.success("Agendamento cancelado!");
       refetchAppointments();
@@ -83,8 +85,8 @@ export default function AppointmentsManager() {
   const filteredAppointments = useMemo(() => {
     return appointments.filter((apt: any) => {
       const matchesSearch = searchQuery === "" ||
-        apt.client?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        apt.service?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+        apt.clientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        apt.serviceName?.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus = statusFilter === "all" || apt.status === statusFilter;
       const matchesMode = operatingMode === "both" || apt.appointmentType === (operatingMode === "queue" ? "queue" : "scheduled");
@@ -164,18 +166,18 @@ export default function AppointmentsManager() {
     <DashboardLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Gerenciar Agendamentos</h1>
-            <p className="text-muted-foreground mt-2">Controle seus agendamentos e fila em tempo real</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">Agendamentos</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">Controle em tempo real</p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="barbershop-select">Estabelecimento</Label>
+          <div className="space-y-1">
+            <Label htmlFor="barbershop-select" className="text-xs text-muted-foreground">Estabelecimento</Label>
             <Select
               value={selectedEstablishment?.toString() || ""}
               onValueChange={(value) => setSelectedEstablishment(parseInt(value))}
             >
-              <SelectTrigger id="barbershop-select" className="w-64">
+              <SelectTrigger id="barbershop-select" className="w-full sm:w-64 h-11">
                 <SelectValue placeholder="Selecione um estabelecimento" />
               </SelectTrigger>
               <SelectContent>
@@ -252,7 +254,7 @@ export default function AppointmentsManager() {
             {/* Search and Filters */}
             <Card>
               <CardContent className="pt-6">
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -263,7 +265,7 @@ export default function AppointmentsManager() {
                     />
                   </div>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-48">
+                    <SelectTrigger className="w-full sm:w-48">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -280,7 +282,7 @@ export default function AppointmentsManager() {
             </Card>
 
             {/* Tabs */}
-            <Tabs defaultValue="scheduled" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="scheduled">
                   Agendamentos ({scheduledAppointments.length})
@@ -298,72 +300,49 @@ export default function AppointmentsManager() {
                     </CardContent>
                   </Card>
                 ) : scheduledAppointments.length > 0 ? (
-                  <div className="grid gap-4">
+                  <div className="grid gap-3">
                     {scheduledAppointments.map((apt: any) => (
-                      <Card key={apt.id}>
-                        <CardContent className="pt-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-4 mb-3">
-                                <div>
-                                  <h3 className="font-semibold text-lg">{apt.client?.name || "Cliente"}</h3>
-                                  <p className="text-sm text-muted-foreground">{apt.service?.name || "Serviço"}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-2xl font-bold text-blue-600">
-                                    {apt.scheduledTime
-                                      ? format(new Date(apt.scheduledTime), "HH:mm", { locale: ptBR })
-                                      : "N/A"}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">{apt.client?.phone || ""}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {getStatusBadge(apt.status)}
-                              </div>
+                      <Card key={apt.id} className="overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-base truncate">{apt.clientName || "Cliente"}</h3>
+                              <p className="text-sm text-muted-foreground truncate">{apt.serviceName || "Serviço"}</p>
+                              {apt.clientPhone && (
+                                <p className="text-xs text-muted-foreground mt-0.5">{apt.clientPhone}</p>
+                              )}
                             </div>
-
-                            <div className="flex gap-2 ml-4">
+                            <div className="text-right shrink-0">
+                              <p className="text-xl font-bold text-primary">
+                                {apt.scheduledTime
+                                  ? format(new Date(apt.scheduledTime), "HH:mm", { locale: ptBR })
+                                  : "N/A"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            {getStatusBadge(apt.status)}
+                            <div className="flex gap-1.5 flex-wrap">
                               {apt.status === "pending" && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdateStatus(apt.id, "confirmed")}
-                                  className="bg-blue-600 hover:bg-blue-700"
-                                >
+                                <Button size="sm" onClick={() => handleUpdateStatus(apt.id, "confirmed")} className="h-8 text-xs bg-blue-600 hover:bg-blue-700">
                                   Confirmar
                                 </Button>
                               )}
                               {apt.status === "confirmed" && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdateStatus(apt.id, "in_progress")}
-                                  className="bg-purple-600 hover:bg-purple-700"
-                                >
+                                <Button size="sm" onClick={() => handleUpdateStatus(apt.id, "in_progress")} className="h-8 text-xs bg-purple-600 hover:bg-purple-700">
                                   Iniciar
                                 </Button>
                               )}
                               {apt.status === "in_progress" && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdateStatus(apt.id, "completed")}
-                                  className="bg-green-600 hover:bg-green-700"
-                                >
+                                <Button size="sm" onClick={() => handleUpdateStatus(apt.id, "completed")} className="h-8 text-xs bg-green-600 hover:bg-green-700">
                                   Concluir
                                 </Button>
                               )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditAppointment(apt)}
-                              >
+                              <Button size="sm" variant="outline" onClick={() => handleEditAppointment(apt)} className="h-8 text-xs">
                                 Editar
                               </Button>
                               {["pending", "confirmed", "in_progress"].includes(apt.status) && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleCancelAppointment(apt.id)}
-                                >
+                                <Button size="sm" variant="outline" onClick={() => handleCancelAppointment(apt.id)} className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10">
                                   Cancelar
                                 </Button>
                               )}
@@ -385,15 +364,14 @@ export default function AppointmentsManager() {
 
               {/* Queue Tab */}
               <TabsContent value="queue" className="space-y-4">
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => setIsCreateQueueModalOpen(true)}
-                    className="gap-2"
-                  >
-                    <Users className="w-4 h-4" />
-                    Adicionar à Fila
-                  </Button>
-                </div>
+                {!isMobile && (
+                  <div className="flex justify-end">
+                    <Button onClick={() => setIsCreateQueueModalOpen(true)} className="gap-2">
+                      <Users className="w-4 h-4" />
+                      Adicionar à Fila
+                    </Button>
+                  </div>
+                )}
 
                 {appointmentsLoading ? (
                   <Card>
@@ -403,41 +381,31 @@ export default function AppointmentsManager() {
                     </CardContent>
                   </Card>
                 ) : queueAppointments.length > 0 ? (
-                  <div className="grid gap-4">
+                  <div className="grid gap-3">
                     {queueAppointments.map((item: any, index: number) => (
-                      <Card key={item.id}>
-                        <CardContent className="pt-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
-                              <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full">
-                                <span className="text-lg font-bold text-blue-600">#{index + 1}</span>
-                              </div>
-                              <div>
-                                <h3 className="font-semibold">{item.client?.name || "Cliente"}</h3>
-                                <p className="text-sm text-muted-foreground">{item.service?.name || "Serviço"}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Entrou às{" "}
-                                  {item.createdAt
-                                    ? format(new Date(item.createdAt), "HH:mm", { locale: ptBR })
-                                    : "N/A"}
-                                </p>
-                              </div>
+                      <Card key={item.id} className="overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-full shrink-0">
+                              <span className="text-sm font-bold text-primary">#{index + 1}</span>
                             </div>
-
-                            <div className="flex gap-2">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold truncate">{item.clientName || "Cliente"}</h3>
+                              <p className="text-sm text-muted-foreground truncate">{item.serviceName || "Serviço"}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Entrou às{" "}
+                                {item.createdAt
+                                  ? format(new Date(item.createdAt), "HH:mm", { locale: ptBR })
+                                  : "N/A"}
+                              </p>
+                            </div>
+                            <div className="flex flex-col gap-1.5 shrink-0">
                               {index === 0 && (
-                                <Button
-                                  onClick={() => handleUpdateStatus(item.id, "in_progress")}
-                                  className="bg-green-600 hover:bg-green-700"
-                                >
-                                  Chamar Próximo
+                                <Button size="sm" onClick={() => handleUpdateStatus(item.id, "in_progress")} className="h-8 text-xs bg-green-600 hover:bg-green-700">
+                                  Chamar
                                 </Button>
                               )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleCancelAppointment(item.id)}
-                              >
+                              <Button size="sm" variant="outline" onClick={() => handleCancelAppointment(item.id)} className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10">
                                 Remover
                               </Button>
                             </div>
@@ -469,6 +437,17 @@ export default function AppointmentsManager() {
               </p>
             </CardContent>
           </Card>
+        )}
+
+        {/* FAB — queue tab, mobile only */}
+        {isMobile && selectedEstablishment && activeTab === "queue" && (
+          <button
+            onClick={() => setIsCreateQueueModalOpen(true)}
+            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-transform"
+            aria-label="Adicionar à fila"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
         )}
 
         {/* Edit Appointment Modal */}

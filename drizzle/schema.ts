@@ -98,6 +98,23 @@ export const services = pgTable("services", {
 export type Service = typeof services.$inferSelect;
 export type InsertService = typeof services.$inferInsert;
 
+// Relação Profissional <-> Serviço (quais serviços cada profissional oferece)
+export const barberServices = pgTable("barberServices", {
+  id: serial("id").primaryKey(),
+  barberId: integer("barberId").notNull(),
+  serviceId: integer("serviceId").notNull(),
+  establishmentId: integer("establishmentId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  barberServiceUnique: index("barberServiceUnique").on(table.barberId, table.serviceId),
+  barberIdIdx: index("barberServicesBarberIdIdx").on(table.barberId),
+  serviceIdIdx: index("barberServicesServiceIdIdx").on(table.serviceId),
+  estIdIdx: index("barberServicesEstablishmentIdIdx").on(table.establishmentId),
+}));
+
+export type BarberService = typeof barberServices.$inferSelect;
+export type InsertBarberService = typeof barberServices.$inferInsert;
+
 // Clientes
 export const clients = pgTable("clients", {
   id: serial("id").primaryKey(),

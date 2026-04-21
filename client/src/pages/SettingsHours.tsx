@@ -56,7 +56,7 @@ export default function SettingsHours() {
 
   const updateHours = trpc.establishment.updateOperatingHours.useMutation({
     onSuccess: () => {
-      utils.settings.getSettings.invalidate();
+      utils.establishment.getSettings.invalidate({ establishmentId: effectiveestablishmentId });
       toast.success("Horários atualizados com sucesso!");
     },
     onError: (err) => toast.error(err.message || "Erro ao salvar horários"),

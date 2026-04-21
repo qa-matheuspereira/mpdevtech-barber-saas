@@ -76,15 +76,10 @@ export default function SettingsGeneral() {
   // Mutations
   const createEstablishment = trpc.establishment.create.useMutation({
     onSuccess: (data) => {
-      utils.barbershop.list.invalidate();
+      utils.establishment.list.invalidate();
       toast.success("Estabelecimento criado com sucesso!");
-      // Select the new barbershop
-      // Ideally we would get the ID back and set it, but list refetch should handle it if it's the first one
-      if (data?.[0]?.id) {
-        setSelectedestablishmentId(data[0].id.toString());
-      } else {
-        // Fallback if not returned directly in some drivers
-        // Re-fetch list
+      if (data?.id) {
+        setSelectedestablishmentId(data.id.toString());
       }
     },
     onError: (err) => toast.error(err.message || "Erro ao criar estabelecimento"),
@@ -92,8 +87,8 @@ export default function SettingsGeneral() {
 
   const updateEstablishment = trpc.establishment.update.useMutation({
     onSuccess: () => {
-      utils.barbershop.get.invalidate({ id: effectiveestablishmentId });
-      utils.barbershop.list.invalidate();
+      utils.establishment.get.invalidate({ id: effectiveestablishmentId });
+      utils.establishment.list.invalidate();
       toast.success("Configurações atualizadas com sucesso!");
     },
     onError: (err) => toast.error(err.message || "Erro ao atualizar configurações"),
@@ -115,7 +110,7 @@ export default function SettingsGeneral() {
 
     if (effectiveestablishmentId > 0) {
       updateEstablishment.mutate({
-        id: effectiveestablishmentId,
+        establishmentId: effectiveestablishmentId,
         ...formData,
       });
     } else {

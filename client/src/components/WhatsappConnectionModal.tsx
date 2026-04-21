@@ -25,104 +25,68 @@ export default function WhatsappConnectionModal({
   establishmentId,
   onSuccess,
 }: WhatsappConnectionModalProps) {
-  const [sessionId, setSessionId] = useState<number | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<
-    "pending" | "connected" | "error"
-  >("pending");
-  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<"pending" | "connected" | "error">("pending");
   const [pollingActive, setPollingActive] = useState(false);
 
-  // Create session mutation
-  const createSessionMutation = trpc.whatsapp.createSession.useMutation({
+  // Connect instance mutation (gets QR code from Evolution API)
+  const connectMutation = trpc.whatsapp.connectInstance.useMutation({
     onError: (error) => {
-      toast.error("Erro ao criar sessão WhatsApp");
+      toast.error("Erro ao gerar QR Code WhatsApp");
       setIsConnecting(false);
+      setPollingActive(false);
       console.error(error);
     },
   });
 
-  // Confirm connection mutation
-  const confirmConnectionMutation =
-    trpc.whatsapp.confirmConnection.useMutation({
-      onSuccess: () => {
-        toast.success("WhatsApp conectado com sucesso!");
-        setConnectionStatus("connected");
-        setIsConnecting(false);
-        setPollingActive(false);
-        onSuccess?.();
-        setTimeout(() => {
-          onOpenChange(false);
-        }, 2000);
-      },
-      onError: (error) => {
-        toast.error("Erro ao confirmar conexão");
-        console.error(error);
-        setConnectionStatus("error");
-        setIsConnecting(false);
-        setPollingActive(false);
-      },
-    });
-
-  // Get session query
-  const getSessionQuery = trpc.whatsapp.getSession.useQuery(
-    { id: sessionId || 0 },
-    { enabled: !!sessionId && pollingActive, refetchInterval: 5000 }
+  // Check connection status query (polls every 5s when active)
+  const statusQuery = trpc.whatsapp.checkConnectionStatus.useQuery(
+    { establishmentId },
+    { enabled: pollingActive, refetchInterval: 5000 }
   );
 
-  // Monitorar mudanças no status da sessão
+  // Detect when WhatsApp connects
   useEffect(() => {
-    if (
-      getSessionQuery.data &&
-      pollingActive &&
-      getSessionQuery.data.status === "connected" &&
-      getSessionQuery.data.phoneNumber
-    ) {
-      setPhoneNumber(getSessionQuery.data.phoneNumber);
-      confirmConnectionMutation.mutate({
-        sessionId: sessionId!,
-        phoneNumber: getSessionQuery.data.phoneNumber,
-      });
+    if (pollingActive && statusQuery.data?.instance?.state === "open") {
+      setConnectionStatus("connected");
+      setIsConnecting(false);
+      setPollingActive(false);
+      toast.success("WhatsApp conectado com sucesso!");
+      onSuccess?.();
+      setTimeout(() => onOpenChange(false), 2000);
     }
-  }, [getSessionQuery.data, pollingActive, sessionId]);
+  }, [statusQuery.data, pollingActive]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => setPollingActive(false);
+  }, []);
 
   const handleStartConnection = async () => {
     setIsConnecting(true);
     setConnectionStatus("pending");
     try {
-      const data = await createSessionMutation.mutateAsync({
-        establishmentId: establishmentId,
-        sessionName: `Session-${Date.now()}`,
-      });
-      setSessionId(data.id);
-      setQrCode(data.qrCode);
+      const data = await connectMutation.mutateAsync({ establishmentId });
+      // Evolution API returns QR code in various fields depending on version
+      const qr = (data as any)?.qrcode?.base64 || (data as any)?.qrcode || (data as any)?.code || null;
+      setQrCode(qr ? (qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`) : null);
       setPollingActive(true);
     } catch (error) {
       setIsConnecting(false);
       setPollingActive(false);
-      console.error(error);
     }
   };
 
   const handleClose = () => {
     if (!isConnecting) {
-      setSessionId(null);
       setQrCode(null);
       setConnectionStatus("pending");
-      setPhoneNumber(null);
       setIsConnecting(false);
       setPollingActive(false);
       onOpenChange(false);
     }
   };
-
-  // Limpar polling ao desmontar
-  useEffect(() => {
-    return () => {
-      setPollingActive(false);
-    };
-  }, []);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -161,7 +125,7 @@ export default function WhatsappConnectionModal({
             <Alert className="border-green-200 bg-green-50">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
-                WhatsApp conectado com sucesso! {phoneNumber && `(${phoneNumber})`}
+                WhatsApp conectado com sucesso!
               </AlertDescription>
             </Alert>
           )}
@@ -177,24 +141,18 @@ export default function WhatsappConnectionModal({
                 />
               </div>
 
-              {isConnecting && (
+              {isConnecting && connectionStatus !== "connected" && (
                 <div className="text-center space-y-2">
                   <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                  <p className="text-sm text-muted-foreground">
-                    Aguardando confirmação...
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Escaneie o QR Code com seu celular
-                  </p>
+                  <p className="text-sm text-muted-foreground">Aguardando confirmação...</p>
+                  <p className="text-xs text-muted-foreground">Escaneie o QR Code com seu celular</p>
                 </div>
               )}
 
               {connectionStatus === "connected" && (
                 <div className="text-center space-y-2">
                   <CheckCircle2 className="w-6 h-6 text-green-600 mx-auto" />
-                  <p className="text-sm font-medium text-green-600">
-                    Conectado com sucesso!
-                  </p>
+                  <p className="text-sm font-medium text-green-600">Conectado com sucesso!</p>
                 </div>
               )}
             </div>
@@ -214,10 +172,10 @@ export default function WhatsappConnectionModal({
             {!qrCode && (
               <Button
                 onClick={handleStartConnection}
-                disabled={isConnecting || createSessionMutation.isPending}
+                disabled={isConnecting || connectMutation.isPending}
                 className="gap-2"
               >
-                {isConnecting || createSessionMutation.isPending ? (
+                {isConnecting || connectMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Gerando...

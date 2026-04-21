@@ -46,13 +46,13 @@ export default function EditAppointmentModal({
   const [conflictError, setConflictError] = useState<string | null>(null);
 
   // Fetch clients
-  const { data: clients = [] } = trpc.customer.list.useQuery(
+  const { data: clients = [] } = trpc.clients.list.useQuery(
     { establishmentId },
     { enabled: !!establishmentId }
   );
 
   // Fetch services
-  const { data: services = [] } = trpc.service.list.useQuery(
+  const { data: services = [] } = trpc.services.list.useQuery(
     { establishmentId },
     { enabled: !!establishmentId }
   );
@@ -66,7 +66,7 @@ export default function EditAppointmentModal({
   // Check availability query
 
   // Update appointment mutation
-  const updateMutation = trpc.appointment.updateAppointment.useMutation({
+  const updateMutation = trpc.appointments.updateAppointment.useMutation({
     onSuccess: () => {
       toast.success("Agendamento atualizado com sucesso!");
       onOpenChange(false);

@@ -1,7 +1,7 @@
 import { getDb } from "../db";
 import { appointments, whatsappSessions, clients, services } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
-import { sendMessage } from "./wppconnect-improved";
+import { sendMessage } from "./wppconnect-api";
 
 /**
  * Enviar notificação de confirmação de agendamento via WhatsApp
@@ -173,7 +173,7 @@ export async function sendStartNotification(appointmentId: number) {
     }
 
     // Formatar mensagem
-    const message = `🎉 Seu atendimento está começando!\n\nVocê já pode se dirigir à barbearia. Obrigado! 💇`;
+    const message = `🎉 Seu atendimento está começando!\n\nVocê já pode se dirigir ao estabelecimento. Obrigado! 💇`;
 
     // Enviar mensagem
     await sendMessage(session.sessionName, client.phone || "", message);

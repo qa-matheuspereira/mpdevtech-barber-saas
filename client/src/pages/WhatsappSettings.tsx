@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle2, QrCode, RefreshCw, Server, Bot, Webhook, Clock, MessageSquare, Bell, Edit2, UserCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, QrCode, RefreshCw, Server, Bot, Webhook, Clock, MessageSquare, Bell, Edit2, UserCircle, Smartphone } from "lucide-react";
 import QRCode from "qrcode";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -41,6 +41,10 @@ export default function WhatsappSettings() {
   // Connection State
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [generatedQr, setGeneratedQr] = useState<string | null>(null);
+
+  // Pairing code state
+  const [pairingPhone, setPairingPhone] = useState("");
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
 
   // Generate QR if needed
   useEffect(() => {
@@ -113,6 +117,14 @@ export default function WhatsappSettings() {
       utils.whatsapp.getSettings.invalidate();
     },
     onError: (error) => toast.error(`Erro ao deletar: ${error.message}`),
+  });
+
+  const requestPairingCode = trpc.whatsapp.requestPairingCode.useMutation({
+    onSuccess: (data) => {
+      setPairingCode(data.pairingCode);
+      toast.success("Código gerado! Use-o no WhatsApp em até 60 segundos.");
+    },
+    onError: (error) => toast.error(`Erro ao gerar código: ${error.message}`),
   });
 
   // Load settings into state
@@ -334,6 +346,63 @@ export default function WhatsappSettings() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Pairing Code Card */}
+            {settings && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Smartphone className="w-5 h-5 text-green-600" />
+                    Conectar pelo Celular (sem QR Code)
+                  </CardTitle>
+                  <CardDescription>
+                    Ideal para conectar pelo celular. Gere um código e insira no WhatsApp.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-2">
+                    <Label htmlFor="pairingPhone">Número do WhatsApp</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="pairingPhone"
+                        placeholder="5511999999999"
+                        value={pairingPhone}
+                        onChange={(e) => setPairingPhone(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        onClick={() => {
+                          setPairingCode(null);
+                          requestPairingCode.mutate({ phoneNumber: pairingPhone });
+                        }}
+                        disabled={!pairingPhone || requestPairingCode.isPending}
+                        className="shrink-0"
+                      >
+                        {requestPairingCode.isPending
+                          ? <RefreshCw className="h-4 w-4 animate-spin" />
+                          : "Gerar Código"}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Código do país + DDD + número. Ex: 5511999999999
+                    </p>
+                  </div>
+
+                  {pairingCode && (
+                    <div className="flex flex-col items-center gap-3 p-6 bg-green-50 border border-green-200 rounded-xl">
+                      <p className="text-sm font-medium text-green-800">Seu código de pareamento:</p>
+                      <p className="text-4xl font-mono font-bold tracking-[0.25em] text-green-700 select-all">
+                        {pairingCode}
+                      </p>
+                      <div className="text-sm text-green-700 text-center space-y-1">
+                        <p className="font-medium">Como usar:</p>
+                        <p>WhatsApp → Configurações → Dispositivos Conectados → Conectar com número de telefone</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* AI AGENT TAB */}

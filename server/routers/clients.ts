@@ -1,25 +1,38 @@
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { clients } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { clients, establishments } from "../../drizzle/schema";
+import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
+async function verifyEstablishmentOwnership(establishmentId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  const [establishment] = await db
+    .select({ id: establishments.id })
+    .from(establishments)
+    .where(and(eq(establishments.id, establishmentId), eq(establishments.ownerId, userId)))
+    .limit(1);
+
+  if (!establishment) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado a este estabelecimento" });
+  }
+}
+
 export const clientRouter = router({
-  // List clients for a barbershop
   list: protectedProcedure
-    .input(z.object({
-      establishmentId: z.number(),
-    }))
+    .input(z.object({ establishmentId: z.number() }))
     .query(async ({ ctx, input }) => {
       if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+      await verifyEstablishmentOwnership(input.establishmentId, ctx.user.id);
+
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
       return db.select().from(clients).where(eq(clients.establishmentId, input.establishmentId));
     }),
 
-  // Get or create client by phone
   getOrCreate: protectedProcedure
     .input(z.object({
       establishmentId: z.number(),
@@ -30,38 +43,23 @@ export const clientRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      await verifyEstablishmentOwnership(input.establishmentId, ctx.user.id);
 
-      // TODO: Verify barbershop ownership
-
-      // Check if client exists
-      const existing = await db.select().from(clients).where(
-        eq(clients.phone, input.phone)
-      ).limit(1);
-
-      if (existing.length > 0) {
-        return existing[0];
-      }
-
-      // Create new client
-      await db.insert(clients).values({
-        establishmentId: input.establishmentId,
-        name: input.name,
-        phone: input.phone,
-        whatsapp: input.whatsapp,
-        email: input.email,
-      });
-
-      // Get the newly created client
-      const newClient = await db.select().from(clients).where(
-        eq(clients.phone, input.phone)
-      ).limit(1);
-
-      return newClient[0];
+      return getOrCreateClientPublic(input);
     }),
 
-  // Update client
+  getOrCreatePublic: publicProcedure
+    .input(z.object({
+      establishmentId: z.number(),
+      name: z.string().min(1),
+      phone: z.string().min(8),
+      whatsapp: z.string().optional(),
+      email: z.string().email().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      return getOrCreateClientPublic(input);
+    }),
+
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
@@ -69,20 +67,47 @@ export const clientRouter = router({
       name: z.string().optional(),
       phone: z.string().optional(),
       whatsapp: z.string().optional(),
-      email: z.string().optional(),
+      email: z.string().email().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+      await verifyEstablishmentOwnership(input.establishmentId, ctx.user.id);
+
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      // TODO: Verify barbershop ownership
-
       const { id, establishmentId, ...updateData } = input;
-      const result = await db.update(clients)
-        .set(updateData)
-        .where(eq(clients.id, id));
+      await db.update(clients).set(updateData).where(
+        and(eq(clients.id, id), eq(clients.establishmentId, establishmentId))
+      );
 
-      return result;
+      return { success: true };
     }),
 });
+
+async function getOrCreateClientPublic(input: {
+  establishmentId: number;
+  name: string;
+  phone: string;
+  whatsapp?: string;
+  email?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  const existing = await db.select().from(clients).where(
+    and(eq(clients.phone, input.phone), eq(clients.establishmentId, input.establishmentId))
+  ).limit(1);
+
+  if (existing.length > 0) return existing[0];
+
+  const inserted = await db.insert(clients).values({
+    establishmentId: input.establishmentId,
+    name: input.name,
+    phone: input.phone,
+    whatsapp: input.whatsapp,
+    email: input.email,
+  }).returning();
+
+  return inserted[0];
+}

@@ -19,6 +19,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import BottomNav from "./BottomNav";
 
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, LogOut, Menu, MessageSquare, PanelLeft, Users, Calendar, BarChart3, Settings, Scissors, Clock, Home, Activity, MessageCircle, Shield } from "lucide-react";
@@ -303,25 +304,28 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
-              </div>
+          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-9 w-9 rounded-lg" />
+              <img src="/logo.png" alt="Logo" className="h-6" />
             </div>
+            <span className="text-sm font-medium text-foreground">
+              {activeMenuItem?.label ?? "Menu"}
+            </span>
+            <div className="w-9" />
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
-        <footer className="py-3 text-center text-xs text-muted-foreground border-t">
-          Desenvolvido por MP Dev Tech
-        </footer>
+        <main className="flex-1 p-4" style={isMobile ? { paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom))" } : undefined}>
+          {children}
+        </main>
+        {!isMobile && (
+          <footer className="py-3 text-center text-xs text-muted-foreground border-t">
+            Desenvolvido por MP Dev Tech
+          </footer>
+        )}
       </SidebarInset>
 
+      <BottomNav />
       <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
     </>
   );

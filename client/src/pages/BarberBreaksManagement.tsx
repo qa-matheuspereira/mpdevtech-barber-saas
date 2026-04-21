@@ -1,32 +1,22 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Plus, Trash2, Edit } from "lucide-react";
+import { Clock, Plus, Trash2, Edit, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-interface BarberBreak {
-  id: number;
-  barberId: number;
-  barberName: string;
-  name: string;
-  startTime: string;
-  endTime: string;
-  daysOfWeek: number[];
-  isRecurring: boolean;
-}
+import { trpc } from "@/lib/trpc";
 
 const DAYS_OF_WEEK = [
   { value: 0, label: "Domingo" },
@@ -38,313 +28,222 @@ const DAYS_OF_WEEK = [
   { value: 6, label: "Sábado" },
 ];
 
+const DEFAULT_FORM = {
+  name: "",
+  startTime: "12:00",
+  endTime: "13:00",
+  daysOfWeek: [1, 2, 3, 4, 5] as number[],
+  isRecurring: true,
+};
+
 export default function BarberBreaksManagement() {
-  const [selectedBarber, setSelectedBarber] = useState("1");
+  const utils = trpc.useUtils();
+
+  const [selectedEstablishment, setSelectedEstablishment] = useState<string>("");
+  const [selectedBarber, setSelectedBarber] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingBreak, setEditingBreak] = useState<BarberBreak | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    startTime: "12:00",
-    endTime: "13:00",
-    daysOfWeek: [1, 2, 3, 4, 5],
-    isRecurring: true,
+  const [editingBreakId, setEditingBreakId] = useState<number | null>(null);
+  const [formData, setFormData] = useState(DEFAULT_FORM);
+
+  const { data: establishments, isLoading: loadingShops } = trpc.establishment.list.useQuery();
+
+  const effectiveEstId = selectedEstablishment
+    ? parseInt(selectedEstablishment)
+    : establishments?.[0]?.id ?? 0;
+
+  const { data: barbers, isLoading: loadingBarbers } = trpc.barbers.list.useQuery(
+    { establishmentId: effectiveEstId },
+    { enabled: effectiveEstId > 0 }
+  );
+
+  const effectiveBarberId = selectedBarber
+    ? parseInt(selectedBarber)
+    : barbers?.[0]?.id ?? 0;
+
+  const { data: breaks, isLoading: loadingBreaks } = trpc.barberBreaks.listForBarber.useQuery(
+    { barberId: effectiveBarberId, establishmentId: effectiveEstId },
+    { enabled: effectiveBarberId > 0 && effectiveEstId > 0 }
+  );
+
+  const createBreak = trpc.barberBreaks.create.useMutation({
+    onSuccess: () => {
+      utils.barberBreaks.listForBarber.invalidate({ barberId: effectiveBarberId, establishmentId: effectiveEstId });
+      toast.success("Pausa criada com sucesso!");
+      closeDialog();
+    },
+    onError: (err) => toast.error(err.message || "Erro ao criar pausa"),
   });
 
-  // Mock data
-  const barbers = [
-    { id: "1", name: "João Silva" },
-    { id: "2", name: "Carlos Santos" },
-    { id: "3", name: "Pedro Oliveira" },
-  ];
+  const updateBreak = trpc.barberBreaks.update.useMutation({
+    onSuccess: () => {
+      utils.barberBreaks.listForBarber.invalidate({ barberId: effectiveBarberId, establishmentId: effectiveEstId });
+      toast.success("Pausa atualizada com sucesso!");
+      closeDialog();
+    },
+    onError: (err) => toast.error(err.message || "Erro ao atualizar pausa"),
+  });
 
-  const breaks: BarberBreak[] = [
-    {
-      id: 1,
-      barberId: 1,
-      barberName: "João Silva",
-      name: "Almoço",
-      startTime: "12:00",
-      endTime: "13:00",
-      daysOfWeek: [1, 2, 3, 4, 5],
-      isRecurring: true,
+  const deleteBreak = trpc.barberBreaks.delete.useMutation({
+    onSuccess: () => {
+      utils.barberBreaks.listForBarber.invalidate({ barberId: effectiveBarberId, establishmentId: effectiveEstId });
+      toast.success("Pausa removida com sucesso!");
     },
-    {
-      id: 2,
-      barberId: 1,
-      barberName: "João Silva",
-      name: "Café",
-      startTime: "15:30",
-      endTime: "16:00",
-      daysOfWeek: [1, 2, 3, 4, 5],
-      isRecurring: true,
-    },
-    {
-      id: 3,
-      barberId: 2,
-      barberName: "Carlos Santos",
-      name: "Almoço",
-      startTime: "13:00",
-      endTime: "14:00",
-      daysOfWeek: [1, 2, 3, 4, 5],
-      isRecurring: true,
-    },
-  ];
+    onError: (err) => toast.error(err.message || "Erro ao remover pausa"),
+  });
 
-  const barberBreaks = breaks.filter((b) => b.barberId === parseInt(selectedBarber));
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    setEditingBreakId(null);
+    setFormData(DEFAULT_FORM);
+  };
 
   const handleSaveBreak = () => {
     if (!formData.name.trim()) {
       toast.error("Nome da pausa é obrigatório");
       return;
     }
-
     const [startHour, startMin] = formData.startTime.split(":").map(Number);
     const [endHour, endMin] = formData.endTime.split(":").map(Number);
-    const startTotalMin = startHour * 60 + startMin;
-    const endTotalMin = endHour * 60 + endMin;
-
-    if (startTotalMin >= endTotalMin) {
+    if (startHour * 60 + startMin >= endHour * 60 + endMin) {
       toast.error("Hora de início deve ser anterior à hora de término");
       return;
     }
-
     if (formData.daysOfWeek.length === 0) {
       toast.error("Selecione pelo menos um dia da semana");
       return;
     }
 
-    if (editingBreak) {
-      toast.success("Pausa atualizada com sucesso!");
+    if (editingBreakId) {
+      updateBreak.mutate({
+        breakId: editingBreakId,
+        barberId: effectiveBarberId,
+        establishmentId: effectiveEstId,
+        name: formData.name,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        daysOfWeek: formData.daysOfWeek,
+        isRecurring: formData.isRecurring,
+      });
     } else {
-      toast.success("Pausa criada com sucesso!");
+      createBreak.mutate({
+        barberId: effectiveBarberId,
+        establishmentId: effectiveEstId,
+        name: formData.name,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        daysOfWeek: formData.daysOfWeek,
+        isRecurring: formData.isRecurring,
+      });
     }
-
-    setIsDialogOpen(false);
-    resetForm();
   };
 
-  const resetForm = () => {
+  const handleEditBreak = (b: any) => {
+    setEditingBreakId(b.id);
     setFormData({
-      name: "",
-      startTime: "12:00",
-      endTime: "13:00",
-      daysOfWeek: [1, 2, 3, 4, 5],
-      isRecurring: true,
-    });
-    setEditingBreak(null);
-  };
-
-  const handleEditBreak = (breakItem: BarberBreak) => {
-    setEditingBreak(breakItem);
-    setFormData({
-      name: breakItem.name,
-      startTime: breakItem.startTime,
-      endTime: breakItem.endTime,
-      daysOfWeek: breakItem.daysOfWeek,
-      isRecurring: breakItem.isRecurring,
+      name: b.name,
+      startTime: b.startTime,
+      endTime: b.endTime ?? "13:00",
+      daysOfWeek: b.daysOfWeek ?? [],
+      isRecurring: b.isRecurring ?? true,
     });
     setIsDialogOpen(true);
   };
 
-  const handleDeleteBreak = (breakId: number) => {
-    toast.success("Pausa removida com sucesso!");
-  };
+  const getDaysLabel = (days: number[]) =>
+    days.map((d) => DAYS_OF_WEEK.find((day) => day.value === d)?.label.substring(0, 3)).join(", ");
 
-  const getDaysLabel = (days: number[]) => {
-    const labels = days
-      .map((d) => DAYS_OF_WEEK.find((day) => day.value === d)?.label.substring(0, 3))
-      .join(", ");
-    return labels;
-  };
+  const selectedBarberName = barbers?.find((b) => b.id === effectiveBarberId)?.name ?? "";
+  const isSaving = createBreak.isPending || updateBreak.isPending;
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold">Pausas por Profissional</h1>
             <p className="text-muted-foreground mt-2">Gerencie as pausas e intervalos de cada profissional</p>
           </div>
-          <div>
-            <Label htmlFor="barber-select" className="block mb-2">
-              Selecione o Profissional
-            </Label>
-            <select
-              id="barber-select"
-              value={selectedBarber}
-              onChange={(e) => setSelectedBarber(e.target.value)}
-              className="w-64 px-3 py-2 border rounded-lg"
-            >
-              {barbers.map((barber) => (
-                <option key={barber.id} value={barber.id}>
-                  {barber.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex gap-4 flex-wrap">
+            <div>
+              <Label htmlFor="est-select" className="block mb-2">Estabelecimento</Label>
+              <Select
+                value={selectedEstablishment || (establishments?.[0]?.id.toString() ?? "")}
+                onValueChange={setSelectedEstablishment}
+              >
+                <SelectTrigger id="est-select" className="w-56">
+                  <SelectValue placeholder={loadingShops ? "Carregando..." : "Selecione"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(establishments ?? []).map((shop) => (
+                    <SelectItem key={shop.id} value={shop.id.toString()}>{shop.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="barber-select" className="block mb-2">Profissional</Label>
+              <Select
+                value={selectedBarber || (barbers?.[0]?.id.toString() ?? "")}
+                onValueChange={setSelectedBarber}
+                disabled={!effectiveEstId || loadingBarbers}
+              >
+                <SelectTrigger id="barber-select" className="w-56">
+                  <SelectValue placeholder={loadingBarbers ? "Carregando..." : "Selecione"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(barbers ?? []).map((b) => (
+                    <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
-        {/* Add Break Button */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => {
-                resetForm();
-                setIsDialogOpen(true);
-              }}
-              className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Nova Pausa
-            </Button>
-          </DialogTrigger>
+        <Button
+          onClick={() => { setFormData(DEFAULT_FORM); setEditingBreakId(null); setIsDialogOpen(true); }}
+          disabled={!effectiveBarberId}
+          className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Nova Pausa
+        </Button>
 
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingBreak ? "Editar Pausa" : "Nova Pausa"}</DialogTitle>
-              <DialogDescription>
-                Defina uma pausa recorrente para {barbers.find((b) => b.id === selectedBarber)?.name}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="break-name">Nome da Pausa *</Label>
-                <Input
-                  id="break-name"
-                  placeholder="Ex: Almoço, Café, etc"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="start-time">Início *</Label>
-                  <Input
-                    id="start-time"
-                    type="time"
-                    value={formData.startTime}
-                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="end-time">Término *</Label>
-                  <Input
-                    id="end-time"
-                    type="time"
-                    value={formData.endTime}
-                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label>Dias da Semana *</Label>
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                  {DAYS_OF_WEEK.map((day) => (
-                    <div key={day.value} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`day-${day.value}`}
-                        checked={formData.daysOfWeek.includes(day.value)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setFormData({
-                              ...formData,
-                              daysOfWeek: [...formData.daysOfWeek, day.value].sort(),
-                            });
-                          } else {
-                            setFormData({
-                              ...formData,
-                              daysOfWeek: formData.daysOfWeek.filter((d) => d !== day.value),
-                            });
-                          }
-                        }}
-                      />
-                      <label htmlFor={`day-${day.value}`} className="text-sm cursor-pointer">
-                        {day.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="recurring"
-                  checked={formData.isRecurring}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, isRecurring: checked as boolean })
-                  }
-                />
-                <label htmlFor="recurring" className="text-sm cursor-pointer">
-                  Pausa Recorrente
-                </label>
-              </div>
-
-              <div className="flex gap-3 justify-end pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleSaveBreak} className="bg-blue-600 hover:bg-blue-700">
-                  {editingBreak ? "Atualizar" : "Criar"} Pausa
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Breaks List */}
         <div className="space-y-3">
-          {barberBreaks.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <p className="text-muted-foreground">Nenhuma pausa configurada para este profissional</p>
-              </CardContent>
-            </Card>
+          {loadingBreaks ? (
+            <Card><CardContent className="pt-6 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></CardContent></Card>
+          ) : !effectiveBarberId ? (
+            <Card><CardContent className="pt-6 text-center"><p className="text-muted-foreground">Selecione um profissional para ver as pausas</p></CardContent></Card>
+          ) : (breaks ?? []).length === 0 ? (
+            <Card><CardContent className="pt-6 text-center"><p className="text-muted-foreground">Nenhuma pausa configurada para este profissional</p></CardContent></Card>
           ) : (
-            barberBreaks.map((breakItem) => (
-              <Card key={breakItem.id} className="hover:shadow-md transition-shadow">
+            (breaks ?? []).map((b) => (
+              <Card key={b.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Clock className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold">{breakItem.name}</h3>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                            <span>
-                              {breakItem.startTime} - {breakItem.endTime}
-                            </span>
-                            <span>•</span>
-                            <span>{getDaysLabel(breakItem.daysOfWeek)}</span>
-                          </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">{b.name}</h3>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                          <span>{b.startTime} - {b.endTime}</span>
+                          <span>•</span>
+                          <span>{getDaysLabel(b.daysOfWeek ?? [])}</span>
                         </div>
                       </div>
                     </div>
-
                     <div className="flex items-center gap-2">
-                      {breakItem.isRecurring && (
-                        <Badge variant="secondary">Recorrente</Badge>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditBreak(breakItem)}
-                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      >
+                      {b.isRecurring && <Badge variant="secondary">Recorrente</Badge>}
+                      <Button variant="ghost" size="sm" onClick={() => handleEditBreak(b)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDeleteBreak(breakItem.id)}
+                        onClick={() => deleteBreak.mutate({ breakId: b.id, barberId: effectiveBarberId, establishmentId: effectiveEstId })}
+                        disabled={deleteBreak.isPending}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -357,11 +256,8 @@ export default function BarberBreaksManagement() {
           )}
         </div>
 
-        {/* Info */}
         <Card>
-          <CardHeader>
-            <CardTitle>Dicas</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Dicas</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <p>• As pausas recorrentes se repetem automaticamente nos dias selecionados</p>
             <p>• Clientes não conseguirão agendar durante as pausas configuradas</p>
@@ -370,6 +266,76 @@ export default function BarberBreaksManagement() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingBreakId ? "Editar Pausa" : "Nova Pausa"}</DialogTitle>
+            <DialogDescription>
+              Pausa para {selectedBarberName || "profissional selecionado"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="break-name">Nome da Pausa *</Label>
+              <Input
+                id="break-name"
+                placeholder="Ex: Almoço, Café, etc"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start-time">Início *</Label>
+                <Input id="start-time" type="time" value={formData.startTime} onChange={(e) => setFormData({ ...formData, startTime: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="end-time">Término *</Label>
+                <Input id="end-time" type="time" value={formData.endTime} onChange={(e) => setFormData({ ...formData, endTime: e.target.value })} className="mt-1" />
+              </div>
+            </div>
+            <div>
+              <Label>Dias da Semana *</Label>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                {DAYS_OF_WEEK.map((day) => (
+                  <div key={day.value} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`day-${day.value}`}
+                      checked={formData.daysOfWeek.includes(day.value)}
+                      onCheckedChange={(checked) => {
+                        setFormData({
+                          ...formData,
+                          daysOfWeek: checked
+                            ? [...formData.daysOfWeek, day.value].sort()
+                            : formData.daysOfWeek.filter((d) => d !== day.value),
+                        });
+                      }}
+                    />
+                    <label htmlFor={`day-${day.value}`} className="text-sm cursor-pointer">{day.label}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="recurring"
+                checked={formData.isRecurring}
+                onCheckedChange={(checked) => setFormData({ ...formData, isRecurring: checked as boolean })}
+              />
+              <label htmlFor="recurring" className="text-sm cursor-pointer">Pausa Recorrente</label>
+            </div>
+            <div className="flex gap-3 justify-end pt-4">
+              <Button variant="outline" onClick={closeDialog} disabled={isSaving}>Cancelar</Button>
+              <Button onClick={handleSaveBreak} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {editingBreakId ? "Atualizar" : "Criar"} Pausa
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

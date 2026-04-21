@@ -5,7 +5,20 @@ import { whatsappInstances } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { EvolutionApiService } from "../services/evolution-api";
 
-// Helper to get service instance
+async function resolveEstablishmentId(userId: number, inputEstablishmentId?: number): Promise<number> {
+  const { getEstablishmentsByOwnerId } = await import("../db");
+  const shops = await getEstablishmentsByOwnerId(userId);
+  if (shops.length === 0) throw new Error("Nenhum estabelecimento encontrado");
+
+  if (inputEstablishmentId) {
+    const match = shops.find(s => s.id === inputEstablishmentId);
+    if (!match) throw new Error("Estabelecimento não encontrado");
+    return match.id;
+  }
+
+  return shops[0].id;
+}
+
 async function getEvolutionService(establishmentId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
@@ -17,7 +30,7 @@ async function getEvolutionService(establishmentId: number) {
     .limit(1);
 
   if (!instance || !instance.apiUrl || !instance.apiKey) {
-    throw new Error("Evolution API not configured for this barbershop");
+    throw new Error("Evolution API não configurada para este estabelecimento");
   }
 
   return {
@@ -28,9 +41,9 @@ async function getEvolutionService(establishmentId: number) {
 }
 
 export const whatsappRouter = router({
-  // Salvar/Atualizar configurações da Evolution API
   updateSettings: protectedProcedure
     .input(z.object({
+      establishmentId: z.number().optional(),
       apiUrl: z.string().url(),
       apiKey: z.string().min(1),
       instanceName: z.string().min(1),
@@ -47,13 +60,13 @@ export const whatsappRouter = router({
         reminders: z.object({
           first: z.string().optional(),
           second: z.string().optional(),
-          third: z.string().optional()
+          third: z.string().optional(),
         }).optional(),
         followUps: z.object({
           first: z.string().optional(),
           second: z.string().optional(),
-          third: z.string().optional()
-        }).optional()
+          third: z.string().optional(),
+        }).optional(),
       }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -61,36 +74,20 @@ export const whatsappRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database unavailable");
 
-      // Check if settings exist
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input.establishmentId);
+
       const [existing] = await db
         .select()
         .from(whatsappInstances)
-        .where(eq(whatsappInstances.establishmentId, 1)) // Assuming single tenant for now or getting from context/barbershop list
-        // TODO: Handle multi-tenant properly. user -> barbershop.
-        // For now, we'll try to find any instance for the user's barbershop.
-        // But since we don't have establishmentId in input, we need to fetch it.
-        // Let's assume we pass establishmentId or fetch the first one owned by user.
+        .where(eq(whatsappInstances.establishmentId, establishmentId))
         .limit(1);
 
-      // Get user's primary barbershop
-      const { getEstablishmentsByOwnerId } = await import("../db");
-      const shops = await getEstablishmentsByOwnerId(ctx.user.id);
-      if (shops.length === 0) throw new Error("No barbershop found");
-      const establishmentId = shops[0].id;
-
-      let result;
       if (existing) {
-        result = await db.update(whatsappInstances)
-          .set({
-            apiUrl: input.apiUrl,
-            apiKey: input.apiKey,
-            instanceName: input.instanceName,
-            aiConfig: input.aiConfig,
-            updatedAt: new Date(),
-          })
+        await db.update(whatsappInstances)
+          .set({ apiUrl: input.apiUrl, apiKey: input.apiKey, instanceName: input.instanceName, aiConfig: input.aiConfig, updatedAt: new Date() })
           .where(eq(whatsappInstances.id, existing.id));
       } else {
-        result = await db.insert(whatsappInstances).values({
+        await db.insert(whatsappInstances).values({
           establishmentId,
           apiUrl: input.apiUrl,
           apiKey: input.apiKey,
@@ -103,17 +100,15 @@ export const whatsappRouter = router({
       return { success: true };
     }),
 
-  // Obter configurações
   getSettings: protectedProcedure
-    .query(async ({ ctx }) => {
+    .input(z.object({ establishmentId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error("Unauthorized");
       const db = await getDb();
       if (!db) throw new Error("Database unavailable");
 
-      const { getEstablishmentsByOwnerId } = await import("../db");
-      const shops = await getEstablishmentsByOwnerId(ctx.user.id);
-      if (shops.length === 0) return null;
-      const establishmentId = shops[0].id;
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input?.establishmentId).catch(() => null);
+      if (!establishmentId) return null;
 
       const [settings] = await db
         .select()
@@ -121,79 +116,76 @@ export const whatsappRouter = router({
         .where(eq(whatsappInstances.establishmentId, establishmentId))
         .limit(1);
 
-      return settings;
+      return settings ?? null;
     }),
 
-  // Criar Instância (na Evolution API)
   createInstance: protectedProcedure
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ establishmentId: z.number().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error("Unauthorized");
-      const { getEstablishmentsByOwnerId } = await import("../db");
-      const shops = await getEstablishmentsByOwnerId(ctx.user.id);
-      if (shops.length === 0) throw new Error("No barbershop found");
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input?.establishmentId);
 
-      try {
-        const { service, instanceName, instance } = await getEvolutionService(shops[0].id);
-        const result = await service.createInstance(instanceName);
-        return result;
-      } catch (error: any) {
-        // If already exists, try to fetching connection status/QR
-        throw new Error(error.message);
-      }
+      const { service, instanceName } = await getEvolutionService(establishmentId);
+      return service.createInstance(instanceName);
     }),
 
-  // Conectar (Obter QR Code)
   connectInstance: protectedProcedure
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ establishmentId: z.number().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error("Unauthorized");
-      const { getEstablishmentsByOwnerId } = await import("../db");
-      const shops = await getEstablishmentsByOwnerId(ctx.user.id);
-      if (shops.length === 0) throw new Error("No barbershop found");
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input?.establishmentId);
 
-      const { service, instanceName } = await getEvolutionService(shops[0].id);
-      const result = await service.connectInstance(instanceName);
-      return result; // contains base64/ascii qr
+      const { service, instanceName } = await getEvolutionService(establishmentId);
+      return service.connectInstance(instanceName);
     }),
 
-  // Verificar Status
   checkConnectionStatus: protectedProcedure
-    .query(async ({ ctx }) => {
+    .input(z.object({ establishmentId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error("Unauthorized");
-      const { getEstablishmentsByOwnerId } = await import("../db");
-      const shops = await getEstablishmentsByOwnerId(ctx.user.id);
-      if (shops.length === 0) return null;
+
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input?.establishmentId).catch(() => null);
+      if (!establishmentId) return null;
 
       try {
-        const { service, instanceName } = await getEvolutionService(shops[0].id);
-        const status = await service.getInstanceStatus(instanceName);
-        return status;
-      } catch (error) {
-        return { instance: { state: "disconnected", error: String(error) } };
+        const { service, instanceName } = await getEvolutionService(establishmentId);
+        return service.getInstanceStatus(instanceName);
+      } catch {
+        return { instance: { state: "disconnected" } };
       }
     }),
 
-  // Desconectar
   disconnectSession: protectedProcedure
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ establishmentId: z.number().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error("Unauthorized");
-      const { getEstablishmentsByOwnerId } = await import("../db");
-      const shops = await getEstablishmentsByOwnerId(ctx.user.id);
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input?.establishmentId);
 
-      const { service, instanceName } = await getEvolutionService(shops[0].id);
+      const { service, instanceName } = await getEvolutionService(establishmentId);
       await service.logoutInstance(instanceName);
       return { success: true };
     }),
 
-  // Delete Session (Limpar da Evolution também)
-  deleteSession: protectedProcedure
-    .mutation(async ({ ctx }) => {
+  requestPairingCode: protectedProcedure
+    .input(z.object({
+      establishmentId: z.number().optional(),
+      phoneNumber: z.string().min(10),
+    }))
+    .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error("Unauthorized");
-      const { getEstablishmentsByOwnerId } = await import("../db");
-      const shops = await getEstablishmentsByOwnerId(ctx.user.id);
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input.establishmentId);
+      const { service, instanceName } = await getEvolutionService(establishmentId);
+      return service.requestPairingCode(instanceName, input.phoneNumber);
+    }),
 
-      const { service, instanceName } = await getEvolutionService(shops[0].id);
+  deleteSession: protectedProcedure
+    .input(z.object({ establishmentId: z.number().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) throw new Error("Unauthorized");
+      const establishmentId = await resolveEstablishmentId(ctx.user.id, input?.establishmentId);
+
+      const { service, instanceName } = await getEvolutionService(establishmentId);
       await service.deleteInstance(instanceName);
       return { success: true };
     }),
 });
-

@@ -7,7 +7,7 @@ import {
   whatsappSessions,
 } from "../../drizzle/schema";
 import { eq, and, like, ilike } from "drizzle-orm";
-import { sendMessage } from "./wppconnect-improved";
+import { sendMessage } from "./wppconnect-api";
 import { invokeLLM } from "../_core/llm";
 
 /**
@@ -352,7 +352,7 @@ async function generateAIResponse(messageText: string): Promise<string> {
         {
           role: "system",
           content:
-            "Você é um assistente de barbearia. Responda de forma amigável e profissional em português. Mantenha as respostas curtas (máximo 2 linhas).",
+            "Você é um assistente de agendamentos. Responda de forma amigável e profissional em português. Mantenha as respostas curtas (máximo 2 linhas).",
         },
         {
           role: "user",
