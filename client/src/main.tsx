@@ -10,21 +10,23 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
-const redirectToLoginIfUnauthorized = (error: unknown) => {
+// Sign out then redirect — never redirect without signout or the session
+// stays in localStorage and causes an infinite UNAUTHORIZED → reload loop.
+const handleUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
+  if (error.message !== UNAUTHED_ERR_MSG) return;
+  if (window.location.pathname === "/login") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
-  if (!isUnauthorized) return;
-
-  window.location.href = "/login";
+  supabase.auth.signOut().finally(() => {
+    window.location.href = "/login";
+  });
 };
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
+    handleUnauthorized(error);
     console.error("[API Query Error]", error);
   }
 });
@@ -32,7 +34,7 @@ queryClient.getQueryCache().subscribe(event => {
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
+    handleUnauthorized(error);
     console.error("[API Mutation Error]", error);
   }
 });

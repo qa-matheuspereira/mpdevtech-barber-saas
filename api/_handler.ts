@@ -11,6 +11,9 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  // Prevent browser/CDN from caching API responses — stale 304s cause auth loops
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   if (req.method === "OPTIONS") { res.sendStatus(200); return; }
   next();
 });
