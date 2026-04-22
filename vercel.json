@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm vite build && pnpm exec esbuild api/_handler.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js",
+  "buildCommand": "pnpm vite build && pnpm exec esbuild api/_handler.ts --bundle --platform=node --format=cjs --outfile=api/index.cjs",
   "outputDirectory": "dist/public",
   "headers": [
     {

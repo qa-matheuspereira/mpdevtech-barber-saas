@@ -9,6 +9,7 @@ build/
 
 # Generated Vercel API bundle (built from api/_handler.ts at deploy time)
 api/index.js
+api/index.cjs
 
 # Environment variables
 .env
