@@ -7,6 +7,9 @@ dist/
 build/
 *.dist
 
+# Generated Vercel API bundle (built from api/_handler.ts at deploy time)
+api/index.js
+
 # Environment variables
 .env
 .env.local
