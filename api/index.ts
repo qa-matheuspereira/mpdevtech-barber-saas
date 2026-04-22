@@ -11,6 +11,10 @@ app.use((_req: Request, res: Response, next: () => void) => {
 
 app.use(express.json());
 
+app.get("/api/ping", (_req: Request, res: Response) => {
+  res.json({ ok: true, ts: Date.now() });
+});
+
 // Lazy-load tRPC router on first request so startup errors surface in response
 app.use("/api/trpc", async (req: Request, res: Response) => {
   try {
