@@ -4,6 +4,7 @@ import { appRouter } from "../server/routers";
 import { createContext } from "../server/_core/context";
 
 const app = express();
+app.set("etag", false);
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
